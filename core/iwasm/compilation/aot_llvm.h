@@ -14,6 +14,7 @@
 #include "llvm-c/Object.h"
 #include "llvm-c/ExecutionEngine.h"
 #include "llvm-c/Analysis.h"
+#include "llvm-c/BitWriter.h"
 #include "llvm-c/Transforms/Utils.h"
 #include "llvm-c/Transforms/Scalar.h"
 #include "llvm-c/Transforms/Vectorize.h"
@@ -35,6 +36,20 @@
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#if LLVM_VERSION_MAJOR < 14
+#define LLVMBuildLoad2(builder, type, value, name) \
+    LLVMBuildLoad(builder, value, name)
+
+#define LLVMBuildCall2(builder, type, func, args, num_args, name) \
+    LLVMBuildCall(builder, func, args, num_args, name)
+
+#define LLVMBuildInBoundsGEP2(builder, type, ptr, indices, num_indices, name) \
+    LLVMBuildInBoundsGEP(builder, ptr, indices, num_indices, name)
+#else
+/* Opaque pointer type */
+#define OPQ_PTR_TYPE INT8_PTR_TYPE
 #endif
 
 /**
@@ -348,6 +363,22 @@ typedef struct AOTCompContext {
     /* Function contexts */
     AOTFuncContext **func_ctxes;
     uint32 func_ctx_count;
+    char **custom_sections_wp;
+    uint32 custom_sections_count;
+
+    /* 3rd-party toolchains */
+    /* External llc compiler, if specified, wamrc will emit the llvm-ir file and
+     * invoke the llc compiler to generate object file.
+     * This can be used when we want to benefit from the optimization of other
+     * LLVM based toolchains */
+    const char *external_llc_compiler;
+    const char *llc_compiler_flags;
+    /* External asm compiler, if specified, wamrc will emit the text-based
+     * assembly file (.s) and invoke the llc compiler to generate object file.
+     * This will be useful when the upstream LLVM doesn't support to emit object
+     * file for some architecture (such as arc) */
+    const char *external_asm_compiler;
+    const char *asm_compiler_flags;
 } AOTCompContext;
 
 enum {
@@ -378,6 +409,8 @@ typedef struct AOTCompOption {
     uint32 size_level;
     uint32 output_format;
     uint32 bounds_checks;
+    char **custom_sections;
+    uint32 custom_sections_count;
 } AOTCompOption, *aot_comp_option_t;
 
 AOTCompContext *
