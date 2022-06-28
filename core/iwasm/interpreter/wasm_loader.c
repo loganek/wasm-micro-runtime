@@ -2171,6 +2171,15 @@ load_export_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,
 
         export = module->exports;
         for (i = 0; i < export_count; i++, export ++) {
+#if WASM_ENABLE_THREAD_MGR == 0
+            if (p == p_end) {
+                /* export section with inconsistent count:
+                   n export declared, but less than n given */
+                set_error_buf(error_buf, error_buf_size,
+                              "length out of bounds");
+                return false;
+            }
+#endif
             read_leb_uint32(p, p_end, str_len);
             CHECK_BUF(p, p_end, str_len);
 
@@ -2811,7 +2820,8 @@ load_user_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,
                   uint32 error_buf_size)
 {
     const uint8 *p = buf, *p_end = buf_end;
-    uint32 name_len;
+    char section_name[32];
+    uint32 name_len, buffer_len;
 
     if (p >= p_end) {
         set_error_buf(error_buf, error_buf_size, "unexpected end");
@@ -2830,6 +2840,16 @@ load_user_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,
         return false;
     }
 
+    buffer_len = sizeof(section_name);
+    memset(section_name, 0, buffer_len);
+    if (name_len < buffer_len) {
+        bh_memcpy_s(section_name, buffer_len, p, name_len);
+    }
+    else {
+        bh_memcpy_s(section_name, buffer_len, p, buffer_len - 4);
+        memset(section_name + buffer_len - 4, '.', 3);
+    }
+
 #if WASM_ENABLE_CUSTOM_NAME_SECTION != 0
     if (memcmp(p, "name", 4) == 0) {
         module->name_section_buf = buf;
@@ -2837,9 +2857,34 @@ load_user_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,
         p += name_len;
         handle_name_section(p, p_end, module, is_load_from_file_buf, error_buf,
                             error_buf_size);
+        LOG_VERBOSE("Load custom name section success.");
+        return true;
     }
 #endif
-    LOG_VERBOSE("Load custom section success.\n");
+
+#if WASM_ENABLE_LOAD_CUSTOM_SECTION != 0
+    {
+        WASMCustomSection *section =
+            loader_malloc(sizeof(WASMCustomSection), error_buf, error_buf_size);
+
+        if (!section) {
+            return false;
+        }
+
+        section->name_addr = (char *)p;
+        section->name_len = name_len;
+        section->content_addr = (uint8 *)(p + name_len);
+        section->content_len = p_end - p - name_len;
+
+        section->next = module->custom_section_list;
+        module->custom_section_list = section;
+        LOG_VERBOSE("Load custom section [%s] success.", section_name);
+        return true;
+    }
+#endif
+
+    LOG_VERBOSE("Ignore custom section [%s].", section_name);
+
     return true;
 fail:
     return false;
@@ -3739,6 +3784,7 @@ wasm_loader_unload(WASMModule *module)
         }
     }
 #endif
+
 #if WASM_ENABLE_DEBUG_INTERP != 0
     WASMFastOPCodeNode *fast_opcode =
         bh_list_first_elem(&module->fast_opcode_list);
@@ -3749,6 +3795,11 @@ wasm_loader_unload(WASMModule *module)
     }
     os_mutex_destroy(&module->ref_count_lock);
 #endif
+
+#if WASM_ENABLE_LOAD_CUSTOM_SECTION != 0
+    wasm_runtime_destroy_custom_sections(module->custom_section_list);
+#endif
+
     wasm_runtime_free(module);
 }
 
@@ -6440,6 +6491,29 @@ get_table_seg_elem_type(const WASMModule *module, uint32 table_seg_idx,
 }
 #endif
 
+#if WASM_ENABLE_LOAD_CUSTOM_SECTION != 0
+const uint8 *
+wasm_loader_get_custom_section(WASMModule *module, const char *name,
+                               uint32 *len)
+{
+    WASMCustomSection *section = module->custom_section_list;
+
+    while (section) {
+        if ((section->name_len == strlen(name))
+            && (memcmp(section->name_addr, name, section->name_len) == 0)) {
+            if (len) {
+                *len = section->content_len;
+            }
+            return section->content_addr;
+        }
+
+        section = section->next;
+    }
+
+    return false;
+}
+#endif
+
 static bool
 wasm_loader_prepare_bytecode(WASMModule *module, WASMFunction *func,
                              uint32 cur_func_idx, char *error_buf,
@@ -6487,6 +6561,16 @@ wasm_loader_prepare_bytecode(WASMModule *module, WASMFunction *func,
     }
 
 #if WASM_ENABLE_FAST_INTERP != 0
+    /* For the first traverse, the initial value of preserved_local_offset has
+     * not been determined, we use the INT16_MAX to represent that a slot has
+     * been copied to preserve space. For second traverse, this field will be
+     * set to the appropriate value in wasm_loader_ctx_reinit.
+     * This is for Issue #1230,
+     * https://github.com/bytecodealliance/wasm-micro-runtime/issues/1230, the
+     * drop opcodes need to know which slots are preserved, so those slots will
+     * not be treated as dynamically allocated slots */
+    loader_ctx->preserved_local_offset = INT16_MAX;
+
 re_scan:
     if (loader_ctx->code_compiled_size > 0) {
         if (!wasm_loader_ctx_reinit(loader_ctx)) {
@@ -7144,8 +7228,10 @@ re_scan:
 #if WASM_ENABLE_FAST_INTERP != 0
                         skip_label();
                         loader_ctx->frame_offset--;
-                        if (*(loader_ctx->frame_offset)
-                            > loader_ctx->start_dynamic_offset)
+                        if ((*(loader_ctx->frame_offset)
+                             > loader_ctx->start_dynamic_offset)
+                            && (*(loader_ctx->frame_offset)
+                                < loader_ctx->max_dynamic_offset))
                             loader_ctx->dynamic_offset--;
 #endif
                     }
@@ -7158,8 +7244,10 @@ re_scan:
 #if WASM_ENABLE_FAST_INTERP != 0
                         skip_label();
                         loader_ctx->frame_offset -= 2;
-                        if (*(loader_ctx->frame_offset)
-                            > loader_ctx->start_dynamic_offset)
+                        if ((*(loader_ctx->frame_offset)
+                             > loader_ctx->start_dynamic_offset)
+                            && (*(loader_ctx->frame_offset)
+                                < loader_ctx->max_dynamic_offset))
                             loader_ctx->dynamic_offset -= 2;
 #endif
                     }
@@ -9240,8 +9328,15 @@ re_scan:
     }
 
     if (loader_ctx->csp_num > 0) {
-        set_error_buf(error_buf, error_buf_size,
-                      "function body must end with END opcode");
+        if (cur_func_idx < module->function_count - 1)
+            /* Function with missing end marker (between two functions) */
+            set_error_buf(error_buf, error_buf_size, "END opcode expected");
+        else
+            /* Function with missing end marker
+               (at EOF or end of code sections) */
+            set_error_buf(error_buf, error_buf_size,
+                          "unexpected end of section or function, "
+                          "or section size mismatch");
         goto fail;
     }
 
