@@ -2907,8 +2907,9 @@ wasm_runtime_init_wasi(WASMModuleInstanceCommon *module_inst,
                          dir_list[i], errno);
             goto fail;
         }
-
+        #if 0
         raw_fd = open(path, O_RDONLY | O_DIRECTORY, 0);
+        #endif
         if (raw_fd == -1) {
             if (error_buf)
                 snprintf(error_buf, error_buf_size,

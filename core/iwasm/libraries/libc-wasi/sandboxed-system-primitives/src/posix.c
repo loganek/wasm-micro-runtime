@@ -216,6 +216,7 @@ convert_timespec(const struct timespec *ts)
 }
 
 // Converts a CloudABI clock identifier to a POSIX clock identifier.
+#if 0
 static bool
 convert_clockid(__wasi_clockid_t in, clockid_t *out)
 {
@@ -240,6 +241,7 @@ convert_clockid(__wasi_clockid_t in, clockid_t *out)
             return false;
     }
 }
+#endif
 
 static void
 wasi_addr_to_bh_sockaddr(const __wasi_addr_t *wasi_addr,
@@ -321,6 +323,20 @@ __wasi_errno_t
 wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
                            __wasi_timestamp_t *resolution)
 {
+#if BH_PLATFORM_WINDOWS
+    switch (clock_id) {
+        case __WASI_CLOCK_MONOTONIC:
+        case __WASI_CLOCK_REALTIME:
+            *resolution = 1; /* Nanosecond precision. */
+            return __WASI_ESUCCESS;
+        case __WASI_CLOCK_PROCESS_CPUTIME_ID:
+        case __WASI_CLOCK_THREAD_CPUTIME_ID:
+            *resolution = 100;
+            return __WASI_ESUCCESS;
+        default:
+            return __WASI_EINVAL;
+    }
+#else
     clockid_t nclock_id;
     if (!convert_clockid(clock_id, &nclock_id))
         return __WASI_EINVAL;
@@ -329,6 +345,7 @@ wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
         return convert_errno(errno);
     *resolution = convert_timespec(&ts);
     return 0;
+#endif
 }
 
 __wasi_errno_t
@@ -336,6 +353,7 @@ wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id,
                             __wasi_timestamp_t precision,
                             __wasi_timestamp_t *time)
 {
+    #if 0
     clockid_t nclock_id;
     if (!convert_clockid(clock_id, &nclock_id))
         return __WASI_EINVAL;
@@ -343,6 +361,7 @@ wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id,
     if (clock_gettime(nclock_id, &ts) < 0)
         return convert_errno(errno);
     *time = convert_timespec(&ts);
+#endif
     return 0;
 }
 
@@ -444,7 +463,7 @@ struct fd_object {
         // Data associated with directory file descriptors.
         struct {
             struct mutex lock;         // Lock to protect members below.
-            DIR *handle;               // Directory handle.
+            // DIR *handle;               // Directory handle.
             __wasi_dircookie_t offset; // Offset of the directory.
         } directory;
     };
@@ -579,6 +598,7 @@ fd_determine_type_rights(int fd, __wasi_filetype_t *type,
                          __wasi_rights_t *rights_base,
                          __wasi_rights_t *rights_inheriting)
 {
+    #if 0
     struct stat sb;
     if (fstat(fd, &sb) < 0)
         return convert_errno(errno);
@@ -647,6 +667,7 @@ fd_determine_type_rights(int fd, __wasi_filetype_t *type,
             *rights_base &= ~(__wasi_rights_t)__WASI_RIGHT_FD_READ;
             break;
     }
+    #endif
     return 0;
 }
 
@@ -672,6 +693,7 @@ fd_number(const struct fd_object *fo)
 static void
 fd_object_release(struct fd_object *fo) UNLOCKS(fo->refcount)
 {
+    #if 0
     if (refcount_release(&fo->refcount)) {
         switch (fo->type) {
             case __WASI_FILETYPE_DIRECTORY:
@@ -691,6 +713,7 @@ fd_object_release(struct fd_object *fo) UNLOCKS(fo->refcount)
         }
         wasm_runtime_free(fo);
     }
+    #endif
 }
 
 // Inserts an already existing file descriptor into the file descriptor
@@ -727,7 +750,7 @@ fd_table_insert_existing(struct fd_table *ft, __wasi_fd_t in, int out)
             fd_object_release(fo);
             return false;
         }
-        fo->directory.handle = NULL;
+        // fo->directory.handle = NULL;
     }
 
     // Grow the file descriptor table if needed.
@@ -784,6 +807,7 @@ fd_table_insert_fd(struct fd_table *ft, int in, __wasi_filetype_t type,
                    __wasi_rights_t rights_inheriting, __wasi_fd_t *out)
     REQUIRES_UNLOCKED(ft->lock)
 {
+    #if 0
     struct fd_object *fo;
 
     __wasi_errno_t error = fd_object_new(type, &fo);
@@ -801,6 +825,8 @@ fd_table_insert_fd(struct fd_table *ft, int in, __wasi_filetype_t type,
         fo->directory.handle = NULL;
     }
     return fd_table_insert(ft, fo, rights_base, rights_inheriting, out);
+    #endif
+    return 0;
 }
 
 __wasi_errno_t
@@ -944,14 +970,17 @@ wasmtime_ssp_fd_datasync(
     if (error != 0)
         return error;
 
+#if 0
 #if CONFIG_HAS_FDATASYNC
     int ret = fdatasync(fd_number(fo));
 #else
     int ret = fsync(fd_number(fo));
 #endif
+
     fd_object_release(fo);
     if (ret < 0)
         return convert_errno(errno);
+#endif
     return 0;
 }
 
@@ -971,7 +1000,7 @@ wasmtime_ssp_fd_pread(
         fd_object_get(curfds, &fo, fd, __WASI_RIGHT_FD_READ, 0);
     if (error != 0)
         return error;
-
+#if 0
 #if CONFIG_HAS_PREADV
     ssize_t len = preadv(fd_number(fo), (const struct iovec *)iov, (int)iovcnt,
                          (off_t)offset);
@@ -1027,6 +1056,7 @@ wasmtime_ssp_fd_pread(
         return 0;
     }
 #endif
+#endif
 }
 
 __wasi_errno_t
@@ -1047,6 +1077,7 @@ wasmtime_ssp_fd_pwrite(
         return error;
 
     ssize_t len;
+    #if 0
 #if CONFIG_HAS_PWRITEV
     len = pwritev(fd_number(fo), (const struct iovec *)iov, (int)iovcnt,
                   (off_t)offset);
@@ -1080,6 +1111,7 @@ wasmtime_ssp_fd_pwrite(
     if (len < 0)
         return convert_errno(errno);
     *nwritten = (size_t)len;
+    #endif
     return 0;
 }
 
@@ -1095,12 +1127,13 @@ wasmtime_ssp_fd_read(
         fd_object_get(curfds, &fo, fd, __WASI_RIGHT_FD_READ, 0);
     if (error != 0)
         return error;
-
+    #if 0
     ssize_t len = readv(fd_number(fo), (const struct iovec *)iov, (int)iovcnt);
     fd_object_release(fo);
     if (len < 0)
         return convert_errno(errno);
     *nread = (size_t)len;
+    #endif
     return 0;
 }
 
@@ -1248,7 +1281,7 @@ wasmtime_ssp_fd_fdstat_get(
     int ret;
     switch (fo->type) {
         default:
-            ret = fcntl(fd_number(fo), F_GETFL);
+            ret = 0; // fcntl(fd_number(fo), F_GETFL);
             break;
     }
     rwlock_unlock(&ft->lock);
@@ -1261,14 +1294,18 @@ wasmtime_ssp_fd_fdstat_get(
     if ((ret & O_DSYNC) != 0)
         buf->fs_flags |= __WASI_FDFLAG_DSYNC;
 #endif
+    #if 0
     if ((ret & O_NONBLOCK) != 0)
         buf->fs_flags |= __WASI_FDFLAG_NONBLOCK;
+    #endif
 #ifdef O_RSYNC
     if ((ret & O_RSYNC) != 0)
         buf->fs_flags |= __WASI_FDFLAG_RSYNC;
 #endif
+    #if 0
     if ((ret & O_SYNC) != 0)
         buf->fs_flags |= __WASI_FDFLAG_SYNC;
+    #endif
     return 0;
 }
 
@@ -1286,29 +1323,30 @@ wasmtime_ssp_fd_fdstat_set_flags(
 #ifdef O_DSYNC
         noflags |= O_DSYNC;
 #else
-        noflags |= O_SYNC;
+        // noflags |= O_SYNC;
 #endif
-    if ((fs_flags & __WASI_FDFLAG_NONBLOCK) != 0)
-        noflags |= O_NONBLOCK;
+    // if ((fs_flags & __WASI_FDFLAG_NONBLOCK) != 0)
+    //    noflags |= O_NONBLOCK;
     if ((fs_flags & __WASI_FDFLAG_RSYNC) != 0)
 #ifdef O_RSYNC
         noflags |= O_RSYNC;
 #else
-        noflags |= O_SYNC;
+        // noflags |= O_SYNC;
 #endif
-    if ((fs_flags & __WASI_FDFLAG_SYNC) != 0)
-        noflags |= O_SYNC;
+    // if ((fs_flags & __WASI_FDFLAG_SYNC) != 0)
+       // noflags |= O_SYNC;
 
     struct fd_object *fo;
     __wasi_errno_t error =
         fd_object_get(curfds, &fo, fd, __WASI_RIGHT_FD_FDSTAT_SET_FLAGS, 0);
     if (error != 0)
         return error;
-
+    #if 0
     int ret = fcntl(fd_number(fo), F_SETFL, noflags);
     fd_object_release(fo);
     if (ret < 0)
         return convert_errno(errno);
+    #endif
     return 0;
 }
 
@@ -1349,11 +1387,12 @@ wasmtime_ssp_fd_sync(
         fd_object_get(curfds, &fo, fd, __WASI_RIGHT_FD_SYNC, 0);
     if (error != 0)
         return error;
-
+    #if 0
     int ret = fsync(fd_number(fo));
     fd_object_release(fo);
     if (ret < 0)
         return convert_errno(errno);
+    #endif
     return 0;
 }
 
@@ -1369,7 +1408,7 @@ wasmtime_ssp_fd_write(
         fd_object_get(curfds, &fo, fd, __WASI_RIGHT_FD_WRITE, 0);
     if (error != 0)
         return error;
-
+    #if 0
 #ifndef BH_VPRINTF
     ssize_t len = writev(fd_number(fo), (const struct iovec *)iov, (int)iovcnt);
 #else
@@ -1397,6 +1436,7 @@ wasmtime_ssp_fd_write(
     if (len < 0)
         return convert_errno(errno);
     *nwritten = (size_t)len;
+    #endif
     return 0;
 }
 
@@ -1482,7 +1522,7 @@ wasmtime_ssp_fd_allocate(
     if (error != 0)
         return error;
 
-#if CONFIG_HAS_POSIX_FALLOCATE
+#if !CONFIG_HAS_POSIX_FALLOCATE
     int ret = posix_fallocate(fd_number(fo), (off_t)offset, (off_t)len);
 #else
     // At least ensure that the file is grown to the right size.
@@ -1492,7 +1532,7 @@ wasmtime_ssp_fd_allocate(
     int ret = fstat(fd_number(fo), &sb);
     off_t newsize = (off_t)(offset + len);
     if (ret == 0 && sb.st_size < newsize)
-        ret = ftruncate(fd_number(fo), newsize);
+        // ret = ftruncate(fd_number(fo), newsize);
 #endif
 
     fd_object_release(fo);
@@ -1527,6 +1567,7 @@ readlinkat_dup(int fd, const char *path, size_t *p_len)
         }
 
         buf = newbuf;
+        #if 0
         ssize_t ret = readlinkat(fd, path, buf, len);
         if (ret < 0) {
             wasm_runtime_free(buf);
@@ -1537,6 +1578,7 @@ readlinkat_dup(int fd, const char *path, size_t *p_len)
             *p_len = len;
             return buf;
         }
+        #endif
         len_org = len;
         len *= 2;
     }
@@ -1645,6 +1687,7 @@ path_get(struct fd_table *curfds, struct path_access *pa, __wasi_fd_t fd,
         }
         else if (curpath > 0 || *paths[curpath] != '\0'
                  || (ends_with_slashes && !needs_final_component)) {
+            #if 0
             // A pathname component whose name we're not interested in that is
             // followed by a slash or is followed by other pathname
             // components. In other words, a pathname component that must be a
@@ -1683,6 +1726,7 @@ path_get(struct fd_table *curfds, struct path_access *pa, __wasi_fd_t fd,
                 error = convert_errno(errno);
                 goto fail;
             }
+            #endif
         }
         else {
             // The final pathname component. Depending on whether it ends with
@@ -1690,7 +1734,7 @@ path_get(struct fd_table *curfds, struct path_access *pa, __wasi_fd_t fd,
             // expansion.
             if (ends_with_slashes
                 || (flags & __WASI_LOOKUP_SYMLINK_FOLLOW) != 0) {
-                symlink = readlinkat_dup(fds[curfd], file, &symlink_len);
+                // symlink = readlinkat_dup(fds[curfd], file, &symlink_len);
                 if (symlink != NULL)
                     goto push_symlink;
                 if (errno != EINVAL && errno != ENOENT) {
@@ -1823,11 +1867,12 @@ wasmtime_ssp_path_create_directory(
                           __WASI_RIGHT_PATH_CREATE_DIRECTORY, 0, true);
     if (error != 0)
         return error;
-
+    #if 0
     int ret = mkdirat(pa.fd, pa.path, 0777);
     path_put(&pa);
     if (ret < 0)
         return convert_errno(errno);
+    #endif
     return 0;
 }
 
@@ -1837,7 +1882,7 @@ validate_path(const char *path, struct fd_prestats *pt)
     size_t i;
     char path_resolved[PATH_MAX], prestat_dir_resolved[PATH_MAX];
     char *path_real, *prestat_dir_real;
-
+    #if 0
     if (!(path_real = realpath(path, path_resolved)))
         /* path doesn't exist, creating a link to this file
            is allowed: if this file is to be created in
@@ -1854,6 +1899,7 @@ validate_path(const char *path, struct fd_prestats *pt)
                 return true;
         }
     }
+    #endif
 
     return false;
 }
@@ -1889,7 +1935,7 @@ wasmtime_ssp_path_link(
         return __WASI_EBADF;
     }
     rwlock_unlock(&prestats->lock);
-
+    #if 0
     int ret = linkat(old_pa.fd, old_pa.path, new_pa.fd, new_pa.path,
                      old_pa.follow ? AT_SYMLINK_FOLLOW : 0);
     if (ret < 0 && errno == ENOTSUP && !old_pa.follow) {
@@ -1910,10 +1956,12 @@ wasmtime_ssp_path_link(
             wasm_runtime_free(target);
         }
     }
+    
     path_put(&old_pa);
     path_put(&new_pa);
     if (ret < 0)
         return convert_errno(errno);
+#endif
     return 0;
 }
 
@@ -1950,8 +1998,8 @@ wasmtime_ssp_path_open(
         noflags |= O_CREAT;
         needed_base |= __WASI_RIGHT_PATH_CREATE_FILE;
     }
-    if ((oflags & __WASI_O_DIRECTORY) != 0)
-        noflags |= O_DIRECTORY;
+    //if ((oflags & __WASI_O_DIRECTORY) != 0)
+    //    noflags |= O_DIRECTORY;
     if ((oflags & __WASI_O_EXCL) != 0)
         noflags |= O_EXCL;
     if ((oflags & __WASI_O_TRUNC) != 0) {
@@ -1966,22 +2014,22 @@ wasmtime_ssp_path_open(
 #ifdef O_DSYNC
         noflags |= O_DSYNC;
 #else
-        noflags |= O_SYNC;
+        // noflags |= O_SYNC;
 #endif
         needed_inheriting |= __WASI_RIGHT_FD_DATASYNC;
     }
-    if ((fs_flags & __WASI_FDFLAG_NONBLOCK) != 0)
-        noflags |= O_NONBLOCK;
+    // if ((fs_flags & __WASI_FDFLAG_NONBLOCK) != 0)
+    //     noflags |= O_NONBLOCK;
     if ((fs_flags & __WASI_FDFLAG_RSYNC) != 0) {
 #ifdef O_RSYNC
         noflags |= O_RSYNC;
 #else
-        noflags |= O_SYNC;
+        // noflags |= O_SYNC;
 #endif
         needed_inheriting |= __WASI_RIGHT_FD_SYNC;
     }
     if ((fs_flags & __WASI_FDFLAG_SYNC) != 0) {
-        noflags |= O_SYNC;
+        // noflags |= O_SYNC;
         needed_inheriting |= __WASI_RIGHT_FD_SYNC;
     }
     if (write && (noflags & (O_APPEND | O_TRUNC)) == 0)
@@ -1993,13 +2041,14 @@ wasmtime_ssp_path_open(
                  needed_inheriting, (oflags & __WASI_O_CREAT) != 0);
     if (error != 0)
         return error;
-    if (!pa.follow)
-        noflags |= O_NOFOLLOW;
-
+    // if (!pa.follow)
+    //     noflags |= O_NOFOLLOW;
+    #if 0
     int nfd = openat(pa.fd, pa.path, noflags, 0666);
     if (nfd < 0) {
         int openat_errno = errno;
         // Linux returns ENXIO instead of EOPNOTSUPP when opening a socket.
+        #if 0
         if (openat_errno == ENXIO) {
             struct stat sb;
             int ret = fstatat(pa.fd, pa.path, &sb,
@@ -2008,8 +2057,10 @@ wasmtime_ssp_path_open(
             return ret == 0 && S_ISSOCK(sb.st_mode) ? __WASI_ENOTSUP
                                                     : __WASI_ENXIO;
         }
+        #endif
         // Linux returns ENOTDIR instead of ELOOP when using
         // O_NOFOLLOW|O_DIRECTORY on a symlink.
+        #if 0
         if (openat_errno == ENOTDIR
             && (noflags & (O_NOFOLLOW | O_DIRECTORY)) != 0) {
             struct stat sb;
@@ -2020,6 +2071,7 @@ wasmtime_ssp_path_open(
             }
             (void)ret;
         }
+        #endif
         path_put(&pa);
         // FreeBSD returns EMLINK instead of ELOOP when using O_NOFOLLOW on
         // a symlink.
@@ -2027,6 +2079,7 @@ wasmtime_ssp_path_open(
             return __WASI_ELOOP;
         return convert_errno(openat_errno);
     }
+    
     path_put(&pa);
 
     // Determine the type of the new file descriptor and which rights
@@ -2055,6 +2108,8 @@ wasmtime_ssp_path_open(
 
     return fd_table_insert_fd(curfds, nfd, type, rights_base & max_base,
                               rights_inheriting & max_inheriting, fd);
+#endif
+    return 0;
 }
 
 // Copies out directory entry metadata or filename, potentially
@@ -2088,6 +2143,7 @@ wasmtime_ssp_fd_readdir(
 
     // Create a directory handle if none has been opened yet.
     mutex_lock(&fo->directory.lock);
+    #if 0
     DIR *dp = fo->directory.handle;
     if (dp == NULL) {
         dp = fdopendir(fd_number(fo));
@@ -2099,14 +2155,17 @@ wasmtime_ssp_fd_readdir(
         fo->directory.handle = dp;
         fo->directory.offset = __WASI_DIRCOOKIE_START;
     }
+    #endif
 
     // Seek to the right position if the requested offset does not match
     // the current offset.
     if (fo->directory.offset != cookie) {
+        #if 0
         if (cookie == __WASI_DIRCOOKIE_START)
             rewinddir(dp);
         else
             seekdir(dp, (long)cookie);
+        #endif
         fo->directory.offset = cookie;
     }
 
@@ -2114,15 +2173,18 @@ wasmtime_ssp_fd_readdir(
     while (*bufused < nbyte) {
         // Read the next directory entry.
         errno = 0;
+        #if 0
         struct dirent *de = readdir(dp);
         if (de == NULL) {
             mutex_unlock(&fo->directory.lock);
             fd_object_release(fo);
             return errno == 0 || *bufused > 0 ? 0 : convert_errno(errno);
         }
-        fo->directory.offset = (__wasi_dircookie_t)telldir(dp);
+        #endif
+        //fo->directory.offset = (__wasi_dircookie_t)telldir(dp);
 
         // Craft a directory entry and copy that back.
+        #if 0
         size_t namlen = strlen(de->d_name);
         __wasi_dirent_t cde = {
             .d_next = fo->directory.offset,
@@ -2164,6 +2226,7 @@ wasmtime_ssp_fd_readdir(
         }
         fd_readdir_put(buf, nbyte, bufused, &cde, sizeof(cde));
         fd_readdir_put(buf, nbyte, bufused, de->d_name, namlen);
+#endif
     }
     mutex_unlock(&fo->directory.lock);
     fd_object_release(fo);
@@ -2187,12 +2250,14 @@ wasmtime_ssp_path_readlink(
     // Linux requires that the buffer size is positive. whereas POSIX does
     // not. Use a fake buffer to store the results if the size is zero.
     char fakebuf[1];
+    #if 0
     ssize_t len = readlinkat(pa.fd, pa.path, bufsize == 0 ? fakebuf : buf,
                              bufsize == 0 ? sizeof(fakebuf) : bufsize);
     path_put(&pa);
     if (len < 0)
         return convert_errno(errno);
     *bufused = (size_t)len < bufsize ? (size_t)len : bufsize;
+    #endif
     return 0;
 }
 
@@ -2218,13 +2283,14 @@ wasmtime_ssp_path_rename(
         path_put(&old_pa);
         return error;
     }
-
+    #if 0
     int ret = renameat(old_pa.fd, old_pa.path, new_pa.fd, new_pa.path);
     path_put(&old_pa);
     path_put(&new_pa);
     if (ret < 0) {
         return convert_errno(errno);
     }
+    #endif
     return 0;
 }
 
@@ -2232,6 +2298,7 @@ wasmtime_ssp_path_rename(
 static void
 convert_stat(const struct stat *in, __wasi_filestat_t *out)
 {
+    #if 0
     *out = (__wasi_filestat_t){
         .st_dev = in->st_dev,
         .st_ino = in->st_ino,
@@ -2241,6 +2308,7 @@ convert_stat(const struct stat *in, __wasi_filestat_t *out)
         .st_mtim = convert_timespec(&in->st_mtim),
         .st_ctim = convert_timespec(&in->st_ctim),
     };
+    #endif
 }
 
 __wasi_errno_t
@@ -2295,6 +2363,7 @@ convert_utimens_arguments(__wasi_timestamp_t st_atim,
                           __wasi_timestamp_t st_mtim,
                           __wasi_fstflags_t fstflags, struct timespec *ts)
 {
+    #if 0
     if ((fstflags & __WASI_FILESTAT_SET_ATIM_NOW) != 0) {
         ts[0].tv_nsec = UTIME_NOW;
     }
@@ -2314,6 +2383,7 @@ convert_utimens_arguments(__wasi_timestamp_t st_atim,
     else {
         ts[1].tv_nsec = UTIME_OMIT;
     }
+    #endif
 }
 
 __wasi_errno_t
@@ -2328,11 +2398,12 @@ wasmtime_ssp_fd_filestat_set_size(
         fd_object_get(curfds, &fo, fd, __WASI_RIGHT_FD_FILESTAT_SET_SIZE, 0);
     if (error != 0)
         return error;
-
+    #if 0
     int ret = ftruncate(fd_number(fo), (off_t)st_size);
     fd_object_release(fo);
     if (ret < 0)
         return convert_errno(errno);
+    #endif
     return 0;
 }
 
@@ -2358,11 +2429,13 @@ wasmtime_ssp_fd_filestat_set_times(
 
     struct timespec ts[2];
     convert_utimens_arguments(st_atim, st_mtim, fstflags, ts);
+    #if 0
     int ret = futimens(fd_number(fo), ts);
 
     fd_object_release(fo);
     if (ret < 0)
         return convert_errno(errno);
+    #endif
     return 0;
 }
 
@@ -2381,14 +2454,17 @@ wasmtime_ssp_path_filestat_get(
         return error;
 
     struct stat sb;
+    #if 0
     int ret = fstatat(pa.fd, pa.path, &sb, pa.follow ? 0 : AT_SYMLINK_NOFOLLOW);
     path_put(&pa);
     if (ret < 0)
         return convert_errno(errno);
+    #endif
     convert_stat(&sb, buf);
 
     // Convert the file type. In the case of sockets there is no way we
     // can easily determine the exact socket type.
+    #if 0
     if (S_ISBLK(sb.st_mode))
         buf->st_filetype = __WASI_FILETYPE_BLOCK_DEVICE;
     else if (S_ISCHR(sb.st_mode))
@@ -2403,6 +2479,7 @@ wasmtime_ssp_path_filestat_get(
         buf->st_filetype = __WASI_FILETYPE_REGULAR_FILE;
     else if (S_ISSOCK(sb.st_mode))
         buf->st_filetype = __WASI_FILETYPE_SOCKET_STREAM;
+    #endif
     return 0;
 }
 
@@ -2436,12 +2513,14 @@ wasmtime_ssp_path_filestat_set_times(
 
     struct timespec ts[2];
     convert_utimens_arguments(st_atim, st_mtim, fstflags, ts);
+    #if 0
     int ret =
         utimensat(pa.fd, pa.path, ts, pa.follow ? 0 : AT_SYMLINK_NOFOLLOW);
 
     path_put(&pa);
     if (ret < 0)
         return convert_errno(errno);
+    #endif
     return 0;
 }
 
@@ -2474,11 +2553,13 @@ wasmtime_ssp_path_symlink(
     }
     rwlock_unlock(&prestats->lock);
 
+    #if 0
     int ret = symlinkat(target, pa.fd, pa.path);
     path_put(&pa);
     wasm_runtime_free(target);
     if (ret < 0)
         return convert_errno(errno);
+    #endif
     return 0;
 }
 
@@ -2495,7 +2576,7 @@ wasmtime_ssp_path_unlink_file(
     if (error != 0)
         return error;
 
-    int ret = unlinkat(pa.fd, pa.path, 0);
+    int ret = 0; // unlinkat(pa.fd, pa.path, 0);
 #ifndef __linux__
     // Non-Linux implementations may return EPERM when attempting to remove a
     // directory without REMOVEDIR. While that's what POSIX specifies, it's
@@ -2506,10 +2587,12 @@ wasmtime_ssp_path_unlink_file(
     // turned out differently.
     if (ret < 0 && errno == EPERM) {
         struct stat statbuf;
+        #if 0
         if (fstatat(pa.fd, pa.path, &statbuf, AT_SYMLINK_NOFOLLOW) == 0
             && S_ISDIR(statbuf.st_mode)) {
             errno = EISDIR;
         }
+        #endif
     }
 #endif
     path_put(&pa);
@@ -2533,6 +2616,7 @@ wasmtime_ssp_path_remove_directory(
     if (error != 0)
         return error;
 
+    #if 0
     int ret = unlinkat(pa.fd, pa.path, AT_REMOVEDIR);
 #ifndef __linux__
     // POSIX permits either EEXIST or ENOTEMPTY when the directory is not empty.
@@ -2545,6 +2629,7 @@ wasmtime_ssp_path_remove_directory(
     if (ret < 0) {
         return convert_errno(errno);
     }
+    #endif
     return 0;
 }
 
@@ -2563,6 +2648,7 @@ wasmtime_ssp_poll_oneoff(
             .type = in[0].u.type,
         };
 #if CONFIG_HAS_CLOCK_NANOSLEEP
+        #if 0
         clockid_t clock_id;
         if (convert_clockid(in[0].u.u.clock.clock_id, &clock_id)) {
             struct timespec ts;
@@ -2579,6 +2665,7 @@ wasmtime_ssp_poll_oneoff(
         else {
             out[0].error = __WASI_ENOTSUP;
         }
+        #endif
 #else
         switch (in[0].u.u.clock.clock_id) {
             case __WASI_CLOCK_MONOTONIC:
@@ -2727,7 +2814,8 @@ wasmtime_ssp_poll_oneoff(
     else {
         timeout = -1;
     }
-    int ret = poll(pfds, nsubscriptions, timeout);
+
+    int ret = 0;// poll(pfds, nsubscriptions, timeout);
 
     __wasi_errno_t error = 0;
     if (ret == -1) {
@@ -2747,8 +2835,10 @@ wasmtime_ssp_poll_oneoff(
                 __wasi_filesize_t nbytes = 0;
                 if (in[i].u.type == __WASI_EVENTTYPE_FD_READ) {
                     int l;
+                    #if 0
                     if (ioctl(fd_number(fos[i]), FIONREAD, &l) == 0)
                         nbytes = (__wasi_filesize_t)l;
+                    #endif
                 }
                 if ((pfds[i].revents & POLLNVAL) != 0) {
                     // Bad file descriptor. This normally cannot occur, as
@@ -2820,6 +2910,7 @@ void wasmtime_ssp_proc_exit(
 __wasi_errno_t
 wasmtime_ssp_proc_raise(__wasi_signal_t sig)
 {
+    #if 0
     static const int signals[] = {
 #define X(v) [__WASI_##v] = v
 #if defined(SIGABRT)
@@ -2919,6 +3010,7 @@ wasmtime_ssp_proc_raise(__wasi_signal_t sig)
 
     if (raise(signals[sig]) < 0)
         return convert_errno(errno);
+    #endif
     return 0;
 }
 
@@ -3189,6 +3281,7 @@ wasi_ssp_sock_get_recv_buf_size(
 #endif
     __wasi_fd_t fd, __wasi_size_t *size)
 {
+    #if 0
     struct fd_object *fo;
     int ret;
     __wasi_errno_t error = fd_object_get(curfds, &fo, fd, 0, 0);
@@ -3205,6 +3298,7 @@ wasi_ssp_sock_get_recv_buf_size(
     }
 
     *size = optval;
+    #endif
 
     return __WASI_ESUCCESS;
 }
@@ -3216,7 +3310,7 @@ wasi_ssp_sock_get_reuse_addr(
 #endif
     __wasi_fd_t fd, uint8_t *reuse)
 {
-
+    #if 0
     struct fd_object *fo;
     int ret;
     __wasi_errno_t error = fd_object_get(curfds, &fo, fd, 0, 0);
@@ -3233,6 +3327,7 @@ wasi_ssp_sock_get_reuse_addr(
     }
 
     *reuse = optval;
+    #endif
 
     return __WASI_ESUCCESS;
 }
@@ -3244,6 +3339,7 @@ wasi_ssp_sock_get_reuse_port(
 #endif
     __wasi_fd_t fd, uint8_t *reuse)
 {
+    #if 0
     struct fd_object *fo;
     int ret;
     __wasi_errno_t error = fd_object_get(curfds, &fo, fd, 0, 0);
@@ -3267,7 +3363,7 @@ wasi_ssp_sock_get_reuse_port(
     }
 
     *reuse = optval;
-
+    #endif
     return __WASI_ESUCCESS;
 }
 
@@ -3278,6 +3374,7 @@ wasi_ssp_sock_get_send_buf_size(
 #endif
     __wasi_fd_t fd, __wasi_size_t *size)
 {
+    #if 0
     struct fd_object *fo;
     int ret;
     __wasi_errno_t error = fd_object_get(curfds, &fo, fd, 0, 0);
@@ -3294,6 +3391,7 @@ wasi_ssp_sock_get_send_buf_size(
     }
 
     *size = optval;
+    #endif
 
     return __WASI_ESUCCESS;
 }
