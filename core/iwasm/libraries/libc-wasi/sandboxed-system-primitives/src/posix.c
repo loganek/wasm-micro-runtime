@@ -21,6 +21,7 @@
 #include "rights.h"
 #include "str.h"
 
+
 /* Some platforms (e.g. Windows) already define `min()` macro.
  We're undefing it here to make sure the `min` call does exactly
  what we want it to do. */
@@ -32,6 +33,10 @@ min(size_t a, size_t b)
 {
     return a > b ? b : a;
 }
+
+
+
+
 
 #if 0 /* TODO: -std=gnu99 causes compile error, comment them first */
 // struct iovec must have the same layout as __wasi_iovec_t.
@@ -73,6 +78,21 @@ static __thread struct fd_prestats *prestats;
 static __thread struct argv_environ_values *argv_environ;
 static __thread struct addr_pool *addr_pool;
 #endif
+
+uint64_t kFrequency = 0;
+void intialisingFrequency() {
+    LARGE_INTEGER Frequency;
+    QueryPerformanceFrequency(&Frequency);
+    kFrequency =  (uint64_t)Frequency.QuadPart;
+};
+
+uint64_t counter(){
+    LARGE_INTEGER Counter;
+    QueryPerformanceCounter(&Counter);
+    return Counter.QuadPart;
+    
+}
+
 
 // Converts a POSIX error code to a CloudABI error code.
 static __wasi_errno_t
@@ -323,35 +343,72 @@ __wasi_errno_t
 wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
                            __wasi_timestamp_t *resolution)
 {
-#ifdef BH_PLATFORM_WINDOWS
-    return __WASI_ENOSYS;
-#else
-    clockid_t nclock_id;
-    if (!convert_clockid(clock_id, &nclock_id))
-        return __WASI_EINVAL;
-    struct timespec ts;
-    if (clock_getres(nclock_id, &ts) < 0)
-        return convert_errno(errno);
-    *resolution = convert_timespec(&ts);
+    if (BH_PLATFORM_WINDOWS) {
+
+        switch (clock_id) {
+            case __WASI_CLOCK_MONOTONIC:
+            {
+                const uint64_t Result =
+                    (uint64_t)(((uint64_t)1000000000) / kFrequency);
+                *resolution = (uint32_t)Result;
+                __wasi_errno_t error = 0;
+                return error;
+            }
+            case __WASI_CLOCK_REALTIME:
+            case __WASI_CLOCK_PROCESS_CPUTIME_ID:
+            case __WASI_CLOCK_THREAD_CPUTIME_ID:
+            {
+                PULONG MaximumTime;
+                PULONG MinimumTime;
+                PULONG CurrentTime;
+                NTSTATUS
+                NTAPI Res;
+                if (Res = NtQueryTimerResolution(&MaximumTime, &MinimumTime,
+                                                 &CurrentTime))
+                    ;
+                unlikely(!NT_SUCCESS_(Res));
+                {
+                    return convert_errno(errno);
+                }
+            }
+        }
+    }
+    else {
+        __wasi_clockid_t nclock_id;
+        if (!convert_clockid(clock_id, &nclock_id))
+            return __WASI_EINVAL;
+        struct timespec ts;
+        if (clock_getres(nclock_id, &ts) < 0)
+            return convert_errno(errno);
+        *resolution = convert_timespec(&ts);
+    }
+
     return 0;
 #endif
 }
 
 __wasi_errno_t
-wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id,
-                            __wasi_timestamp_t precision,
-                            __wasi_timestamp_t *time)
-{
-#ifdef BH_PLATFORM_WINDOWS
-    return __WASI_ENOSYS;
-#else
-    clockid_t nclock_id;
-    if (!convert_clockid(clock_id, &nclock_id))
-        return __WASI_EINVAL;
-    struct timespec ts;
-    if (clock_gettime(nclock_id, &ts) < 0)
-        return convert_errno(errno);
-    *time = convert_timespec(&ts);
+wasmtime_ssp_clock_time_get(wasm_exec_env_t exec_env, wasi_clockid_t clock_id,
+                            wasi_timestamp_t *resolution)
+{ 
+    if (BH_PLATFORM_WINDOWS) {
+        wasm_module_inst_t module_inst = get_module_inst(exec_env);
+        wasi_ctx_t wasi_ctx = get_wasi_ctx(module_inst);
+
+        if(!validate_native_addr(resolution, sizeof(wasi_timestamp_t)))
+            return (wasi_errno_t)-1;
+
+    }
+    else
+    {
+        clockid_t nclock_id;
+        if (!convert_clockid(clock_id, &nclock_id))
+            return __WASI_EINVAL;
+        struct timespec ts;
+        if (clock_gettime(nclock_id, &ts) < 0)
+            return convert_errno(errno);
+        *time = convert_timespec(&ts);
+    }
     return 0;
 #endif
 }
@@ -1554,6 +1611,7 @@ wasmtime_ssp_fd_allocate(
     struct stat sb;
     int ret = fstat(fd_number(fo), &sb);
     off_t newsize = (off_t)(offset + len);
+
     if (ret == 0 && sb.st_size < newsize)
         ret = ftruncate(fd_number(fo), newsize);
 #endif
@@ -2954,7 +3012,7 @@ void wasmtime_ssp_proc_exit(
 __wasi_errno_t
 wasmtime_ssp_proc_raise(__wasi_signal_t sig)
 {
-    static const int signals[] = {
+    static const int signals[50] = {
 #define X(v) [__WASI_##v] = v
 #if defined(SIGABRT)
         X(SIGABRT),
@@ -3035,7 +3093,7 @@ wasmtime_ssp_proc_raise(__wasi_signal_t sig)
         X(SIGXFSZ),
 #endif
 #undef X
-    };
+};
     if (sig >= sizeof(signals) / sizeof(signals[0]) || signals[sig] == 0)
         return __WASI_EINVAL;
 
