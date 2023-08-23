@@ -20,7 +20,7 @@
 #include "refcount.h"
 #include "rights.h"
 #include "str.h"
-#include "C:\Users\bafadumi\source\repos\wasm-micro-runtimee\core\iwasm\libraries\libc-wasi\sandboxed-system-primitives\src\ntdll.h" 
+#include "ntdll.h" 
 
 /* Some platforms (e.g. Windows) already define `min()` macro.
  We're undefing it here to make sure the `min` call does exactly
@@ -80,16 +80,16 @@ static __thread struct addr_pool *addr_pool;
 
 
 static uint64
-calculateFrequency()
+calculate_monotonic_clock_frequency()()
 {
-    LARGE_INTEGER Frequency;
-    QueryPerformanceFrequency(&Frequency);
-    return (uint64)Frequency.QuadPart;
+    LARGE_INTEGER frequency;
+    QueryPerformanceFrequency(&frequency);
+    return (uint64)frequency.QuadPart;
 
 }
 
 static __wasi_timestamp_t
-fromFileTime(FILETIME Filetime)
+from_file_time_to_wasi_timestamp(FILETIME Filetime)
 {
     __wasi_timestamp_t *attempt;
         
@@ -101,12 +101,12 @@ fromFileTime(FILETIME Filetime)
                              .HighPart = Filetime.dwHighDateTime};
 
     auto Duration = Temp.QuadPart  - NTToUnixEpoch;
-    //static_casting doesn't work
+  
 
     return Duration;
 }
 
-uint64 counter()
+uint64 current_value_of_peformance_counter()
 {
     LARGE_INTEGER Counter;
     QueryPerformanceCounter(&Counter);
@@ -363,7 +363,7 @@ wasi_addr_ip_to_bh_ip_addr_buffer(__wasi_addr_ip_t *addr,
 __wasi_errno_t
 wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
                            __wasi_timestamp_t *resolution)
-{
+
 #ifdef BH_PLATFORM_WINDOWS
     {
 
@@ -393,7 +393,7 @@ wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
                 }
             }
         }
-    }
+    
     #else
     {
         __wasi_clockid_t nclock_id;
@@ -427,25 +427,30 @@ wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t precis
                     GetSystemTimeAsFileTime(&SysNow);
 
                 #endif
-                    time = fromFiletime(SysNow);
+                    time = from_file_time_to_wasi_timestamp(SysNow);
                     return 0;
             }
 
             case __WASI_CLOCK_MONOTONIC:
             {
                  uint64_t Nanoseconds;
-                 const auto Counter = counter();
-                 if (likely(NANOSECONDS_PER_SECOND % calculateFrequency() == 0))
+                 const auto Counter = calculate_monotonic_clock_frequency();
+                 if (likely(NANOSECONDS_PER_SECOND
+                                % calculate_monotonic_clock_frequency()
+                            == 0))
                 {
-                    Nanoseconds =
-                        Counter * (NANOSECONDS_PER_SECOND / calculateFrequency());
+                    Nanoseconds = Counter
+                                  * (NANOSECONDS_PER_SECOND
+                                     / calculate_monotonic_clock_frequency());
                  }
                  else {
-                const auto Seconds = Counter / calculateFrequency();
-                const auto Fractions = Counter % calculateFrequency();
+                    const auto Seconds =
+                        Counter / calculate_monotonic_clock_frequency();
+                    const auto Fractions =
+                        Counter % calculate_monotonic_clock_frequency();
                 Nanoseconds = Seconds * NANOSECONDS_PER_SECOND
                               + (Fractions * NANOSECONDS_PER_SECOND)
-                                    / calculateFrequency();
+                                        / calculate_monotonic_clock_frequency();
                  }
                  time = Nanoseconds;
                  
@@ -464,7 +469,8 @@ wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t precis
                         return -1; //temp fix
 
                     }
-                    time = fromFiletime(KernalTime)+ fromFiletime(UserTime);
+                    time = from_file_time_to_wasi_timestamp(KernalTime)
+                           + from_file_time_to_wasi_timestamp(UserTime);
 
                     return -1;
 
@@ -483,8 +489,8 @@ wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t precis
                         return -1; // temp fix
                     }
 
-                     time = fromFiletime(KernalTime)
-                           +fromFiletime(UserTime);
+                     time = from_file_time_to_wasi_timestamp(KernalTime)
+                           + from_file_time_to_wasi_timestamp(UserTime);
                     return -1;
                  }
 
