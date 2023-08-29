@@ -21,8 +21,6 @@
 #include "rights.h"
 #include "str.h"
 
-
-
 /* Some platforms (e.g. Windows) already define `min()` macro.
  We're undefing it here to make sure the `min` call does exactly
  what we want it to do. */
@@ -34,7 +32,6 @@ min(size_t a, size_t b)
 {
     return a > b ? b : a;
 }
-
 
 #if 0 /* TODO: -std=gnu99 causes compile error, comment them first */
 // struct iovec must have the same layout as __wasi_iovec_t.
@@ -330,13 +327,19 @@ wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
 {
 
     #ifdef BH_PLATFORM_WINDOWS
-    os_win_clock_time_get(clock_id, resolution);
+    //os_win_clock_res_get(clock_id, resolution);
 
 
 
 #else
     {
-        os_clock_res_get()
+         __wasi_clockid_t nclock_id;
+        if (!convert_clockid(clock_id, &nclock_id))
+            return __WASI_EINVAL;
+        struct timespec ts;
+        if (clock_getres(nclock_id, &ts) < 0)
+            return convert_errno(errno);
+        *resolution = convert_timespec(&ts);
     }
 
     return 0;
@@ -349,11 +352,16 @@ wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t precis
                             __wasi_timestamp_t *time)
 { 
     #ifdef BH_PLATFORM_WINDOWS 
-        os_win_clock_time_get(clock_id, precision, time);  
+        //os_win_clock_time_get(clock_id, precision, time);  
     #else
     {
-            os_clock_time_get();
-
+        clockid_t nclock_id;
+        if (!convert_clockid(clock_id, &nclock_id))
+            return __WASI_EINVAL;
+        struct timespec ts;
+        if (clock_gettime(nclock_id, &ts) < 0)
+            return convert_errno(errno);
+        *time = convert_timespec(&ts);
     }
     return 0;
 #endif

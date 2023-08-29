@@ -5,10 +5,22 @@
 
 #include "platform_api_vmcore.h"
 #include <winternl.h>
-#include <wasmtime_ssp.h>
+
 
 
 #define NANOSECONDS_PER_SECOND 1000000000
+
+typedef uint32_t __wasi_clockid_t;
+#define __WASI_CLOCK_REALTIME (0)
+#define __WASI_CLOCK_MONOTONIC (1)
+#define __WASI_CLOCK_PROCESS_CPUTIME_ID (2)
+#define __WASI_CLOCK_THREAD_CPUTIME_ID (3)
+
+typedef uint64_t __wasi_timestamp_t;
+
+typedef uint16_t __wasi_errno_t ;
+#define __WASI_ESUCCESS (0)
+#define __WASI_ENOSYS (1)
 
 static uint64
 calculate_monotonic_clock_frequency()
@@ -58,7 +70,7 @@ os_time_get_boot_microsecond()
 }
 
 uint64
-os_win_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t *resolution)
+os_win_clock_res_get(__wasi_clockid_t clock_id, __wasi_timestamp_t *resolution)
 {
     switch (clock_id) {
         case __WASI_CLOCK_MONOTONIC:
@@ -93,7 +105,7 @@ os_win_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t *resolution)
 
 }
 uint64
-os_win_clock_res_get(__wasi_clockid_t clock_id, __wasi_timestamp_t precision,
+os_win_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t precision,
                      __wasi_timestamp_t *time)
 {
     switch (clock_id) {

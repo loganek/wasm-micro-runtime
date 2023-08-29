@@ -13,6 +13,7 @@ extern "C" {
 #include "platform_internal.h"
 #include "../../../config.h"
 
+
 #define BH_MAX_THREAD 32
 
 #define BHT_ERROR (-1)
