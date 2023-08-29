@@ -139,6 +139,7 @@ install (TARGETS iwasm DESTINATION bin)
 
 target_link_libraries (iwasm vmlib ${LLVM_AVAILABLE_LIBS} ${UV_A_LIBS})
 
+
 if (MINGW)
   target_link_libraries (iwasm ws2_32)
 endif ()
@@ -151,6 +152,11 @@ set_target_properties (libiwasm PROPERTIES OUTPUT_NAME libiwasm)
 
 target_link_libraries (libiwasm ${LLVM_AVAILABLE_LIBS} ${UV_A_LIBS})
 
+
 if (MINGW)
   target_link_libraries (libiwasm ws2_32)
 endif ()
+
+if (WIN32)
+  target_link_libraries(iwasm ntdll)
+endif()
