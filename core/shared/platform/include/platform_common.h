@@ -38,6 +38,13 @@ extern "C" {
 #define BH_TIME_T_MAX LONG_MAX
 #endif
 
+typedef enum{
+#define BH_CLOCK_REALTIME (0)
+#define BH_CLOCK_MONOTONIC (1)
+#define BH_CLOCK_PROCESS_CPUTIME_ID (2)
+#define BH_CLOCK_THREAD_CPUTIME_ID (3)
+} bh_clock_id_t;
+
 #if defined(_MSC_BUILD)
 #if defined(COMPILING_WASM_RUNTIME_API)
 __declspec(dllexport) void *BH_MALLOC(unsigned int size);

@@ -161,6 +161,6 @@ if (WIN32)
   target_link_libraries(libiwasm ntdll)
 endif()
 
-if (WIN32)
+if (WAMR_BUILD_LIBC_WASI AND MSVC)
   target_link_libraries(iwasm ntdll)
 endif()

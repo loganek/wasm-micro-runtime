@@ -321,53 +321,6 @@ wasi_addr_ip_to_bh_ip_addr_buffer(__wasi_addr_ip_t *addr,
     }
 }
 
-__wasi_errno_t
-wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
-                           __wasi_timestamp_t *resolution)
-{
-
-    #ifdef BH_PLATFORM_WINDOWS
-    //os_win_clock_res_get(clock_id, resolution);
-
-
-
-#else
-    {
-         __wasi_clockid_t nclock_id;
-        if (!convert_clockid(clock_id, &nclock_id))
-            return __WASI_EINVAL;
-        struct timespec ts;
-        if (clock_getres(nclock_id, &ts) < 0)
-            return convert_errno(errno);
-        *resolution = convert_timespec(&ts);
-    }
-
-    return 0;
-#endif
-    return true;
-}
-
-__wasi_errno_t
-wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t precision, 
-                            __wasi_timestamp_t *time)
-{ 
-    #ifdef BH_PLATFORM_WINDOWS 
-        //os_win_clock_time_get(clock_id, precision, time);  
-    #else
-    {
-        clockid_t nclock_id;
-        if (!convert_clockid(clock_id, &nclock_id))
-            return __WASI_EINVAL;
-        struct timespec ts;
-        if (clock_gettime(nclock_id, &ts) < 0)
-            return convert_errno(errno);
-        *time = convert_timespec(&ts);
-    }
-    return 0;
-#endif
-    return true ;
-}
-
 struct fd_prestat {
     const char *dir;
 };

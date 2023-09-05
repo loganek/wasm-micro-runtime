@@ -6,21 +6,7 @@
 #include "platform_api_vmcore.h"
 #include <winternl.h>
 
-
-
 #define NANOSECONDS_PER_SECOND 1000000000
-
-typedef uint32_t __wasi_clockid_t;
-#define __WASI_CLOCK_REALTIME (0)
-#define __WASI_CLOCK_MONOTONIC (1)
-#define __WASI_CLOCK_PROCESS_CPUTIME_ID (2)
-#define __WASI_CLOCK_THREAD_CPUTIME_ID (3)
-
-typedef uint64_t __wasi_timestamp_t;
-
-typedef uint16_t __wasi_errno_t ;
-#define __WASI_ESUCCESS (0)
-#define __WASI_ENOSYS (1)
 
 static uint64
 calculate_monotonic_clock_frequency()
@@ -31,19 +17,18 @@ calculate_monotonic_clock_frequency()
 }
 
 // The implementation below dervies from the following source: https://github.com/WasmEdge/WasmEdge/blob/b70f48c42922ce5ee7730054b6ac0b1615176285/lib/host/wasi/win.h#L210
-static __wasi_timestamp_t
+ static uint64
 from_file_time_to_wasi_timestamp(FILETIME Filetime)
 {
-    __wasi_timestamp_t *attempt;
+ 
+    static const uint64 nTToUnixEpoch = 134774 * 86400 * NANOSECONDS_PER_SECOND;
 
-    static const uint64 NTToUnixEpoch = 134774 * 86400 * NANOSECONDS_PER_SECOND;
-
-    ULARGE_INTEGER Temp = { .LowPart = Filetime.dwLowDateTime,
+    ULARGE_INTEGER temp = { .LowPart = Filetime.dwLowDateTime,
                             .HighPart = Filetime.dwHighDateTime };
 
-    auto Duration = Temp.QuadPart - NTToUnixEpoch;
+    auto duration = temp.QuadPart - nTToUnixEpoch;
 
-    return Duration;
+    return duration;
 }
 
 uint64
@@ -53,7 +38,6 @@ current_value_of_peformance_counter()
     QueryPerformanceCounter(&Counter);
     return Counter.QuadPart;
 }
-
 
 uint64
 os_time_get_boot_microsecond()
@@ -70,22 +54,20 @@ os_time_get_boot_microsecond()
 }
 
 uint64
-os_win_clock_res_get(__wasi_clockid_t clock_id, __wasi_timestamp_t *resolution)
+os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution)
 {
     switch (clock_id) {
-        case __WASI_CLOCK_MONOTONIC:
+        case BH_CLOCK_MONOTONIC:
         {
-             const __wasi_timestamp_t result =
-                (uint64_t)(((uint64_t)1000000000)
-                           / current_value_of_peformance_counter());
-            *resolution = (__wasi_timestamp_t)result;
-            __wasi_errno_t error = 0;
-            return __WASI_ESUCCESS;
-            
+            const uint64 result =
+                (uint64)NANOSECONDS_PER_SECOND
+                          / calculate_monotonic_clock_frequency();
+            *resolution = result;
+            return BHT_OK;
         }
-        case __WASI_CLOCK_REALTIME:
-        case __WASI_CLOCK_PROCESS_CPUTIME_ID:
-        case __WASI_CLOCK_THREAD_CPUTIME_ID:
+        case BH_CLOCK_REALTIME:
+        case BH_CLOCK_PROCESS_CPUTIME_ID:
+        case BH_CLOCK_THREAD_CPUTIME_ID:
         {
             PULONG MaximumTime;
             PULONG MinimumTime;
@@ -93,24 +75,27 @@ os_win_clock_res_get(__wasi_clockid_t clock_id, __wasi_timestamp_t *resolution)
             NTSTATUS
             NTAPI Res;
             if (Res = NtQueryTimerResolution(&MaximumTime, &MinimumTime,
-                                             &CurrentTime))
-                ;
+                                             &CurrentTime)) {
                 !NT_SUCCESS(Res);
+            }
+            else
+            
             {
-                return -1;
+                return NT_ERROR(Res);
             }
         }
     }
     
 
 }
+
 uint64
-os_win_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t precision,
-                     __wasi_timestamp_t *time)
+os_clock_time_get(bh_clock_id_t clock_id, uint64 precision,
+                     uint64 *time)
 {
     switch (clock_id) {
 
-        case __WASI_CLOCK_REALTIME:
+        case BH_CLOCK_REALTIME:
         {
             FILETIME SysNow;
 #if NTDDI_VERSION >= NTDDI_WIN8
@@ -123,7 +108,7 @@ os_win_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t precision,
             return 0;
         }
 
-        case __WASI_CLOCK_MONOTONIC:
+        case BH_CLOCK_MONOTONIC:
         {
             uint64_t Nanoseconds;
             const auto Counter = calculate_monotonic_clock_frequency();
@@ -145,9 +130,9 @@ os_win_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t precision,
             }
             *time = Nanoseconds;
 
-            return __WASI_ESUCCESS;
+            return BHT_OK;
 
-            case __WASI_CLOCK_PROCESS_CPUTIME_ID:
+            case BH_CLOCK_PROCESS_CPUTIME_ID:
             {
                 FILETIME CreationTime;
                 FILETIME ExitTime;
@@ -158,15 +143,15 @@ os_win_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t precision,
                                               &CreationTime, &ExitTime,
                                               &KernalTime, &UserTime)) {
 
-                    return _get_errno(__WASI_ENOSYS); 
+                    return BHT_ERROR; 
                 }
                 time = from_file_time_to_wasi_timestamp(KernalTime)
                        + from_file_time_to_wasi_timestamp(UserTime);
 
-               return __WASI_ESUCCESS;
+               return BHT_OK;
             }
 
-            case __WASI_CLOCK_THREAD_CPUTIME_ID:
+            case BH_CLOCK_THREAD_CPUTIME_ID:
             {
                 FILETIME CreationTime;
                 FILETIME ExitTime;
@@ -177,14 +162,14 @@ os_win_clock_time_get(__wasi_clockid_t clock_id, __wasi_timestamp_t precision,
                                               &CreationTime, &ExitTime,
                                               &KernalTime, &UserTime)) {
                     
-                return _get_errno(__WASI_ENOSYS); 
+                return BHT_ERROR; 
                     
                 }
 
                 time = from_file_time_to_wasi_timestamp(KernalTime)
                        + from_file_time_to_wasi_timestamp(UserTime);
 
-                return __WASI_ESUCCESS;
+                return BHT_ERROR;
              
             }
         }
