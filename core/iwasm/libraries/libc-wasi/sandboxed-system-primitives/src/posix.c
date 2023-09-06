@@ -321,6 +321,23 @@ wasi_addr_ip_to_bh_ip_addr_buffer(__wasi_addr_ip_t *addr,
     }
 }
 
+__wasi_errno_t
+wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
+                           __wasi_timestamp_t *resolution)
+{
+    os_clock_res_get(clock_id, *resolution);
+    return convert_errno(errno);
+}
+
+__wasi_errno_t
+wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id,
+                            __wasi_timestamp_t precision,
+                            __wasi_timestamp_t *time){
+  
+    os_clock_time_get(clock_id,precision,*time);
+    return convert_errno(errno);
+}
+
 struct fd_prestat {
     const char *dir;
 };

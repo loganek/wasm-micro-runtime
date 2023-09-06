@@ -4,7 +4,44 @@
  */
 
 #include "platform_api_vmcore.h"
-#include <winternl.h>
+#include <time.h>
+
+static __wasi_timestamp_t
+convert_timespec(const struct timespec *ts)
+{
+    if (ts->tv_sec < 0)
+        return 0;
+    if ((__wasi_timestamp_t)ts->tv_sec >= UINT64_MAX / 1000000000)
+        return UINT64_MAX;
+    return (__wasi_timestamp_t)ts->tv_sec * 1000000000
+           + (__wasi_timestamp_t)ts->tv_nsec;
+}
+
+static bool
+convert_clockid(__wasi_clockid_t in, clockid_t *out)
+{
+    switch (in) {
+        case __WASI_CLOCK_MONOTONIC:
+            *out = CLOCK_MONOTONIC;
+            return true;
+#if defined(CLOCK_PROCESS_CPUTIME_ID)
+        case __WASI_CLOCK_PROCESS_CPUTIME_ID:
+            *out = CLOCK_PROCESS_CPUTIME_ID;
+            return true;
+#endif
+        case __WASI_CLOCK_REALTIME:
+            *out = CLOCK_REALTIME;
+            return true;
+#if defined(CLOCK_THREAD_CPUTIME_ID)
+        case __WASI_CLOCK_THREAD_CPUTIME_ID:
+            *out = CLOCK_THREAD_CPUTIME_ID;
+            return true;
+#endif
+        default:
+            return false;
+    }
+}
+#endif
 
 uint64
 os_time_get_boot_microsecond()
@@ -20,138 +57,24 @@ os_time_get_boot_microsecond()
 uint64
 os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution)
 {
-    #ifdef BH_PLATFORM_WINDOWS 
-    switch (clock_id) {
-        case BH_CLOCK_MONOTONIC:
-        {
-            const uint64 result = (uint64)NANOSECONDS_PER_SECOND
-                                  / calculate_monotonic_clock_frequency();
-            *resolution = result;
-            return BHT_OK;
-        }
-        case BH_CLOCK_REALTIME:
-        case BH_CLOCK_PROCESS_CPUTIME_ID:
-        case BH_CLOCK_THREAD_CPUTIME_ID:
-        {
-            PULONG MaximumTime;
-            PULONG MinimumTime;
-            PULONG CurrentTime;
-            NTSTATUS
-            NTAPI Res;
-            if (Res = NtQueryTimerResolution(&MaximumTime, &MinimumTime,
-                                             &CurrentTime)) {
-                !NT_SUCCESS(Res);
-            }
-            else
+    bh_clock_id_t nclock_id;
+    if (!convert_clockid(clock_id, &nclock_id))
+        return BHT_ERROR;
+    struct timespec ts;
+    if (clock_getres(clock_id, &ts) < 0)
+        return BHT_ERROR;
+    *resolution = convert_timespec(&ts);
 
-            {
-                return NT_ERROR(Res);
-            }
-        }
-    }
-
-#else {
-    __wasi_clockid_t nclock_id;
-        if (!convert_clockid(clock_id, &nclock_id))
-            return __WASI_EINVAL;
-        struct timespec ts;
-        if (clock_getres(nclock_id, &ts) < 0)
-            return convert_errno(errno);
-        *resolution = convert_timespec(&ts);
- }
-#endif
 }
 
 uint64
 os_clock_time_get(bh_clock_id_t clock_id, uint64 precision, uint64 *time)
 {
-    #ifdef BH_PLATFORM_WINDOWS 
-    switch (clock_id) {
-
-        case BH_CLOCK_REALTIME:
-        {
-            FILETIME SysNow;
-#if NTDDI_VERSION >= NTDDI_WIN8
-            GetSystemTimePreciseAsFileTime(&SysNow);
-#else
-            GetSystemTimeAsFileTime(&SysNow);
-
-#endif
-            time = from_file_time_to_wasi_timestamp(SysNow);
-            return 0;
-        }
-
-        case BH_CLOCK_MONOTONIC:
-        {
-            uint64_t Nanoseconds;
-            const auto Counter = calculate_monotonic_clock_frequency();
-            if (NANOSECONDS_PER_SECOND % calculate_monotonic_clock_frequency()
-                == 0) {
-                Nanoseconds = Counter
-                              * (NANOSECONDS_PER_SECOND
-                                 / calculate_monotonic_clock_frequency());
-            }
-            else {
-                const auto Seconds =
-                    Counter / calculate_monotonic_clock_frequency();
-                const auto Fractions =
-                    Counter % calculate_monotonic_clock_frequency();
-                Nanoseconds = Seconds * NANOSECONDS_PER_SECOND
-                              + (Fractions * NANOSECONDS_PER_SECOND)
-                                    / calculate_monotonic_clock_frequency();
-            }
-            *time = Nanoseconds;
-
-            return BHT_OK;
-
-            case BH_CLOCK_PROCESS_CPUTIME_ID:
-            {
-                FILETIME CreationTime;
-                FILETIME ExitTime;
-                FILETIME KernalTime;
-                FILETIME UserTime;
-
-                if (!GetProcessTimes(GetCurrentProcess(), &CreationTime,
-                                     &ExitTime, &KernalTime, &UserTime)) {
-
-                    return _get_errno(__WASI_ENOSYS);
-                }
-                time = from_file_time_to_wasi_timestamp(KernalTime)
-                       + from_file_time_to_wasi_timestamp(UserTime);
-
-                return BHT_OK;
-            }
-
-            case BH_CLOCK_THREAD_CPUTIME_ID:
-            {
-                FILETIME CreationTime;
-                FILETIME ExitTime;
-                FILETIME KernalTime;
-                FILETIME UserTime;
-
-                if (!GetProcessTimes(GetCurrentProcess(), &CreationTime,
-                                     &ExitTime, &KernalTime, &UserTime)) {
-
-                    return BHT_ERROR;
-                }
-
-                time = from_file_time_to_wasi_timestamp(KernalTime)
-                       + from_file_time_to_wasi_timestamp(UserTime);
-
-                return BHT_ERROR;
-            }
-        }
-    }
-
-#else
-    {
-        clockid_t nclock_id;
-        if (!convert_clockid(clock_id, &nclock_id))
-            return __WASI_EINVAL;
+    bh_clock_id_t nclock_id;
+    if (!convert_clockid(clock_id, &nclock_id))
+        return __WASI_EINVAL;
         struct timespec ts;
-        if (clock_gettime(nclock_id, &ts) < 0)
-            return convert_errno(errno);
+    if (clock_gettime(nclock_id, &ts) < 0)
+        return BHT_ERROR;
         *time = convert_timespec(&ts);
-    }
-#endif   
 }

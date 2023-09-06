@@ -38,11 +38,11 @@ extern "C" {
 #define BH_TIME_T_MAX LONG_MAX
 #endif
 
-typedef enum{
-#define BH_CLOCK_REALTIME (0)
-#define BH_CLOCK_MONOTONIC (1)
-#define BH_CLOCK_PROCESS_CPUTIME_ID (2)
-#define BH_CLOCK_THREAD_CPUTIME_ID (3)
+typedef enum {
+    BH_CLOCK_ID_REALTIME,
+    BH_CLOCK_ID_MONOTONIC,
+    BH_CLOCK_ID_PROCESS_CPUTIME_ID,
+    BH_CLOCK_ID_THREAD_CPUTIME_ID,
 } bh_clock_id_t;
 
 #if defined(_MSC_BUILD)

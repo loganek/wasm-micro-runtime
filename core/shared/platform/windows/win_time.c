@@ -7,6 +7,7 @@
 #include <winternl.h>
 
 #define NANOSECONDS_PER_SECOND 1000000000
+#define NANOSECONDS_PER_TICK 100
 
 static uint64
 calculate_monotonic_clock_frequency()
@@ -57,7 +58,7 @@ uint64
 os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution)
 {
     switch (clock_id) {
-        case BH_CLOCK_MONOTONIC:
+        case BH_CLOCK_ID_MONOTONIC:
         {
             const uint64 result =
                 (uint64)NANOSECONDS_PER_SECOND
@@ -65,28 +66,24 @@ os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution)
             *resolution = result;
             return BHT_OK;
         }
-        case BH_CLOCK_REALTIME:
-        case BH_CLOCK_PROCESS_CPUTIME_ID:
-        case BH_CLOCK_THREAD_CPUTIME_ID:
-        {
-            PULONG MaximumTime;
-            PULONG MinimumTime;
-            PULONG CurrentTime;
+        case BH_CLOCK_ID_REALTIME:
+        case BH_CLOCK_ID_PROCESS_CPUTIME_ID:
+        case BH_CLOCK_ID_THREAD_CPUTIME_ID:
+        {   
+           
+            PULONG maximumTime;
+            PULONG minimumTime;
+            PULONG currentTime;
             NTSTATUS
-            NTAPI Res;
-            if (Res = NtQueryTimerResolution(&MaximumTime, &MinimumTime,
-                                             &CurrentTime)) {
-                !NT_SUCCESS(Res);
-            }
-            else
-            
-            {
-                return NT_ERROR(Res);
-            }
+            status = NtQueryTimerResolution(&maximumTime, &minimumTime,
+                                            &currentTime);
+             
+           uint64 result = (uint64)currentTime * NANOSECONDS_PER_TICK;
+            *resolution = result / (uint64)NANOSECONDS_PER_SECOND;
+           return BHT_OK;
         }
     }
     
-
 }
 
 uint64
@@ -95,20 +92,20 @@ os_clock_time_get(bh_clock_id_t clock_id, uint64 precision,
 {
     switch (clock_id) {
 
-        case BH_CLOCK_REALTIME:
+        case BH_CLOCK_ID_REALTIME:
         {
-            FILETIME SysNow;
+            FILETIME sysNow;
 #if NTDDI_VERSION >= NTDDI_WIN8
-            GetSystemTimePreciseAsFileTime(&SysNow);
+            GetSystemTimePreciseAsFileTime(&sysNow);
 #else
             GetSystemTimeAsFileTime(&SysNow);
 
 #endif
-            time = from_file_time_to_wasi_timestamp(SysNow);
+            time = from_file_time_to_wasi_timestamp(sysNow);
             return 0;
         }
 
-        case BH_CLOCK_MONOTONIC:
+        case BH_CLOCK_ID_MONOTONIC:
         {
             uint64_t Nanoseconds;
             const auto Counter = calculate_monotonic_clock_frequency();
@@ -132,7 +129,7 @@ os_clock_time_get(bh_clock_id_t clock_id, uint64 precision,
 
             return BHT_OK;
 
-            case BH_CLOCK_PROCESS_CPUTIME_ID:
+            case BH_CLOCK_ID_PROCESS_CPUTIME_ID:
             {
                 FILETIME CreationTime;
                 FILETIME ExitTime;
@@ -151,7 +148,7 @@ os_clock_time_get(bh_clock_id_t clock_id, uint64 precision,
                return BHT_OK;
             }
 
-            case BH_CLOCK_THREAD_CPUTIME_ID:
+            case BH_CLOCK_ID_THREAD_CPUTIME_ID:
             {
                 FILETIME CreationTime;
                 FILETIME ExitTime;
