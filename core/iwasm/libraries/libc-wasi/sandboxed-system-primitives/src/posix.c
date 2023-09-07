@@ -325,17 +325,19 @@ __wasi_errno_t
 wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
                            __wasi_timestamp_t *resolution)
 {
-    os_clock_res_get(clock_id, *resolution);
-    return convert_errno(errno);
+    if (os_clock_res_get(clock_id, *resolution) != BHT_OK)
+        return convert_errno(errno);
+    return __WASI_ESUCCESS;
 }
 
 __wasi_errno_t
 wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id,
                             __wasi_timestamp_t precision,
                             __wasi_timestamp_t *time){
-  
-    os_clock_time_get(clock_id,precision,*time);
-    return convert_errno(errno);
+    
+    if(os_clock_time_get(clock_id,precision,*time) !=BHT_OK);
+        return convert_errno(errno);
+    return __WASI_ESUCCESS;
 }
 
 struct fd_prestat {

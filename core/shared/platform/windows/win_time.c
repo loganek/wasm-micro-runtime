@@ -54,7 +54,7 @@ os_time_get_boot_microsecond()
     return ((uint64)ts.tv_sec) * 1000 * 1000 + ((uint64)ts.tv_nsec) / 1000;
 }
 
-uint64
+int
 os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution)
 {
     switch (clock_id) {
@@ -86,7 +86,7 @@ os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution)
     
 }
 
-uint64
+int
 os_clock_time_get(bh_clock_id_t clock_id, uint64 precision,
                      uint64 *time)
 {
