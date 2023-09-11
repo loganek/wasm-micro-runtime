@@ -13,7 +13,6 @@ extern "C" {
 #include "platform_internal.h"
 #include "../../../config.h"
 
-
 #define BH_MAX_THREAD 32
 
 #define BHT_ERROR (-1)
@@ -43,7 +42,8 @@ typedef enum {
     BH_CLOCK_ID_MONOTONIC,
     BH_CLOCK_ID_PROCESS_CPUTIME_ID,
     BH_CLOCK_ID_THREAD_CPUTIME_ID,
-} bh_clock_id_t;
+} bh_clock_id_t,
+    clockid_t;
 
 #if defined(_MSC_BUILD)
 #if defined(COMPILING_WASM_RUNTIME_API)

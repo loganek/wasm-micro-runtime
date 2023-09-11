@@ -178,8 +178,6 @@ convert_errno(int error)
     return errors[error];
 }
 
-
-
 static bool
 ns_lookup_list_search(char **list, const char *host)
 {
@@ -204,46 +202,6 @@ ns_lookup_list_search(char **list, const char *host)
 
     return false;
 }
-
-// Converts a POSIX timespec to a CloudABI timestamp.
-static __wasi_timestamp_t
-convert_timespec(const struct timespec *ts)
-{
-    if (ts->tv_sec < 0)
-        return 0;
-    if ((__wasi_timestamp_t)ts->tv_sec >= UINT64_MAX / 1000000000)
-        return UINT64_MAX;
-    return (__wasi_timestamp_t)ts->tv_sec * 1000000000
-           + (__wasi_timestamp_t)ts->tv_nsec;
-}
-
-// Converts a CloudABI clock identifier to a POSIX clock identifier.
-#ifndef BH_PLATFORM_WINDOWS
-static bool
-convert_clockid(__wasi_clockid_t in, clockid_t *out)
-{
-    switch (in) {
-        case __WASI_CLOCK_MONOTONIC:
-            *out = CLOCK_MONOTONIC;
-            return true;
-#if defined(CLOCK_PROCESS_CPUTIME_ID)
-        case __WASI_CLOCK_PROCESS_CPUTIME_ID:
-            *out = CLOCK_PROCESS_CPUTIME_ID;
-            return true;
-#endif
-        case __WASI_CLOCK_REALTIME:
-            *out = CLOCK_REALTIME;
-            return true;
-#if defined(CLOCK_THREAD_CPUTIME_ID)
-        case __WASI_CLOCK_THREAD_CPUTIME_ID:
-            *out = CLOCK_THREAD_CPUTIME_ID;
-            return true;
-#endif
-        default:
-            return false;
-    }
-}
-#endif
 
 static void
 wasi_addr_to_bh_sockaddr(const __wasi_addr_t *wasi_addr,
@@ -335,7 +293,7 @@ wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id,
                             __wasi_timestamp_t precision,
                             __wasi_timestamp_t *time){
     
-    if(os_clock_time_get(clock_id,precision,*time) !=BHT_OK);
+    if(os_clock_time_get(clock_id,precision,*time) !=BHT_OK)
         return convert_errno(errno);
     return __WASI_ESUCCESS;
 }
@@ -3020,7 +2978,7 @@ wasmtime_ssp_proc_raise(__wasi_signal_t sig)
         X(SIGXFSZ),
 #endif
 #undef X
-};
+    };
     if (sig >= sizeof(signals) / sizeof(signals[0]) || signals[sig] == 0)
         return __WASI_EINVAL;
 

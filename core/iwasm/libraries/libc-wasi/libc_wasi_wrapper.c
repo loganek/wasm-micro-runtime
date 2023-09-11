@@ -1,4 +1,4 @@
-/*
+ /*
  * Copyright (C) 2019 Intel Corporation.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
@@ -192,7 +192,7 @@ wasi_clock_res_get(wasm_exec_env_t exec_env,
     if (!validate_native_addr(resolution, sizeof(wasi_timestamp_t)))
         return (wasi_errno_t)-1;
 
-    return os_clock_res_get(clock_id, resolution);
+    return wasmtime_ssp_clock_res_get(clock_id, resolution);
 }
 
 static wasi_errno_t
@@ -206,7 +206,7 @@ wasi_clock_time_get(wasm_exec_env_t exec_env,
     if (!validate_native_addr(time, sizeof(wasi_timestamp_t)))
         return (wasi_errno_t)-1;
 
-    return os_clock_time_get(clock_id, precision, time);
+    return wasmtime_ssp_clock_time_get(clock_id, precision, time);
 }
 
 static wasi_errno_t
