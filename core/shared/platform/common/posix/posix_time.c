@@ -17,6 +17,32 @@ os_time_get_boot_microsecond()
     return ((uint64)ts.tv_sec) * 1000 * 1000 + ((uint64)ts.tv_nsec) / 1000;
 }
 
+static bool
+convert_clockid(bh_clock_id_t in, clockid_t *out)
+{
+    switch (in) {
+        case BH_CLOCK_ID_MONOTONIC:
+            *out = CLOCK_MONOTONIC;
+            return true;
+#if defined(CLOCK_PROCESS_CPUTIME_ID)
+        case BH_CLOCK_ID_PROCESS_CPUTIME_ID:
+            *out = CLOCK_PROCESS_CPUTIME_ID;
+            return true;
+#endif
+        case BH_CLOCK_ID_REALTIME:
+            *out = CLOCK_REALTIME;
+            return true;
+#if defined(CLOCK_THREAD_CPUTIME_ID)
+        case BH_CLOCK_ID_THREAD_CPUTIME_ID:
+            *out = CLOCK_THREAD_CPUTIME_ID;
+            return true;
+#endif
+        default:
+            return false;
+    }
+}
+
+
 int
 os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution)
 {
