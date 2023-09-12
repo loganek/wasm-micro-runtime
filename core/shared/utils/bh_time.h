@@ -19,6 +19,4 @@ convert_timespec(const struct timespec *ts);
 #ifdef __cplusplus
 }
 #endif
-
-
 #endif /* end of _BH_TIME_ */

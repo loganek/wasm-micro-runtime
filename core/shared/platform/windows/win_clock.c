@@ -1,0 +1,153 @@
+/*
+ * Copyright (C) 2019 Intel Corporation.  All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+ */
+
+#include "platform_api_vmcore.h"
+#include <winternl.h>
+
+#define NANOSECONDS_PER_SECOND 1000000000
+#define NANOSECONDS_PER_TICK 100
+
+static uint64
+calculate_monotonic_clock_frequency()
+{
+    LARGE_INTEGER frequency;
+    QueryPerformanceFrequency(&frequency);
+    return (uint64)frequency.QuadPart;
+}
+
+// The implementation below dervies from the following source:
+// https://github.com/WasmEdge/WasmEdge/blob/b70f48c42922ce5ee7730054b6ac0b1615176285/lib/host/wasi/win.h#L210
+static uint64
+from_file_time_to_wasi_timestamp(FILETIME Filetime)
+{
+
+    static const uint64 nTToUnixEpoch = 134774 * 86400 * NANOSECONDS_PER_SECOND;
+
+    ULARGE_INTEGER temp = { .LowPart = Filetime.dwLowDateTime,
+                            .HighPart = Filetime.dwHighDateTime };
+
+    auto duration = temp.QuadPart - nTToUnixEpoch;
+
+    return duration;
+}
+
+uint64
+current_value_of_peformance_counter()
+{
+    LARGE_INTEGER Counter;
+    QueryPerformanceCounter(&Counter);
+    return Counter.QuadPart;
+}
+
+int
+os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution)
+{
+    switch (clock_id) {
+        case BH_CLOCK_ID_MONOTONIC:
+        {
+            const uint64 result = (uint64)NANOSECONDS_PER_SECOND
+                                  / calculate_monotonic_clock_frequency();
+            *resolution = result;
+            return BHT_OK;
+        }
+        case BH_CLOCK_ID_REALTIME:
+        case BH_CLOCK_ID_PROCESS_CPUTIME_ID:
+        case BH_CLOCK_ID_THREAD_CPUTIME_ID:
+        {
+
+            PULONG maximumTime;
+            PULONG minimumTime;
+            PULONG currentTime;
+            NTSTATUS
+            status = NtQueryTimerResolution(&maximumTime, &minimumTime,
+                                            &currentTime);
+
+            uint64 result = (uint64)currentTime * NANOSECONDS_PER_TICK;
+            *resolution = result / (uint64)NANOSECONDS_PER_SECOND;
+            return BHT_OK;
+        }
+    }
+}
+
+int
+os_clock_time_get(bh_clock_id_t clock_id, uint64 precision, uint64 *time)
+{
+    switch (clock_id) {
+
+        case BH_CLOCK_ID_REALTIME:
+        {
+            FILETIME sysNow;
+#if NTDDI_VERSION >= NTDDI_WIN8
+            GetSystemTimePreciseAsFileTime(&sysNow);
+#else
+            GetSystemTimeAsFileTime(&SysNow);
+
+#endif
+            time = from_file_time_to_wasi_timestamp(sysNow);
+            return 0;
+        }
+
+        case BH_CLOCK_ID_MONOTONIC:
+        {
+            uint64_t Nanoseconds;
+            const auto Counter = calculate_monotonic_clock_frequency();
+            if (NANOSECONDS_PER_SECOND % calculate_monotonic_clock_frequency()
+                == 0) {
+                Nanoseconds = Counter
+                              * (NANOSECONDS_PER_SECOND
+                                 / calculate_monotonic_clock_frequency());
+            }
+            else {
+                const auto Seconds =
+                    Counter / calculate_monotonic_clock_frequency();
+                const auto Fractions =
+                    Counter % calculate_monotonic_clock_frequency();
+                Nanoseconds = Seconds * NANOSECONDS_PER_SECOND
+                              + (Fractions * NANOSECONDS_PER_SECOND)
+                                    / calculate_monotonic_clock_frequency();
+            }
+            *time = Nanoseconds;
+
+            return BHT_OK;
+
+            case BH_CLOCK_ID_PROCESS_CPUTIME_ID:
+            {
+                FILETIME CreationTime;
+                FILETIME ExitTime;
+                FILETIME KernalTime;
+                FILETIME UserTime;
+
+                if (!GetProcessTimes(GetCurrentProcess(), &CreationTime,
+                                     &ExitTime, &KernalTime, &UserTime)) {
+
+                    return BHT_ERROR;
+                }
+                time = from_file_time_to_wasi_timestamp(KernalTime)
+                       + from_file_time_to_wasi_timestamp(UserTime);
+
+                return BHT_OK;
+            }
+
+            case BH_CLOCK_ID_THREAD_CPUTIME_ID:
+            {
+                FILETIME CreationTime;
+                FILETIME ExitTime;
+                FILETIME KernalTime;
+                FILETIME UserTime;
+
+                if (!GetProcessTimes(GetCurrentProcess(), &CreationTime,
+                                     &ExitTime, &KernalTime, &UserTime)) {
+
+                    return BHT_ERROR;
+                }
+
+                time = from_file_time_to_wasi_timestamp(KernalTime)
+                       + from_file_time_to_wasi_timestamp(UserTime);
+
+                return BHT_ERROR;
+            }
+        }
+    }
+}
