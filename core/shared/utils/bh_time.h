@@ -1,11 +1,10 @@
 /*
- * Copyright (C) 2019 Intel Corporation.  All rights reserved.
+ * Copyright (C) 2023 Amazon Inc.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
 
-#ifndef _BH_TIME_
-#define _BH_TIME_
-#include "bh_platform.h"
+#ifndef _BH_TIME_H
+#define _BH_TIME_H
 
 #ifdef __cplusplus
 extern "C" {

@@ -8,7 +8,6 @@ add_definitions(-DBH_PLATFORM_LINUX_SGX)
 include_directories(${PLATFORM_SHARED_DIR})
 include_directories(${PLATFORM_SHARED_DIR}/../include)
 
-
 if ("$ENV{SGX_SDK}" STREQUAL "")
   set (SGX_SDK_DIR "/opt/intel/sgxsdk")
 else()

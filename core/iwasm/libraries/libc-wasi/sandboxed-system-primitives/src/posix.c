@@ -280,9 +280,9 @@ wasi_addr_ip_to_bh_ip_addr_buffer(__wasi_addr_ip_t *addr,
 }
 
 bh_clock_id_t
-convert_clock_to_bh_clock(__wasi_clockid_t clock_id)
+convert_clock_to_bh_clock(__wasi_clockid_t in, bh_clock_id_t *out)
 {
-    switch (clock_id) {
+    switch (in) {
 
         case __WASI_CLOCK_MONOTONIC:
             return BH_CLOCK_ID_MONOTONIC;
@@ -301,7 +301,9 @@ __wasi_errno_t
 wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
                            __wasi_timestamp_t *resolution)
 {
-    convert_clock_to_bh_clock(clock_id);
+    bh_clock_id_t bh_clockdid;
+    if (convert_clock_to_bh_clock(!clock_id, &bh_clockdid))
+        return convert_errno(errno);
     if (os_clock_res_get(clock_id, resolution) != BHT_OK)
         return convert_errno(errno);
     return __WASI_ESUCCESS;
@@ -312,7 +314,9 @@ wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id,
                             __wasi_timestamp_t precision,
                             __wasi_timestamp_t *time)
 {
-
+    bh_clock_id_t bh_clockdid;
+    if (convert_clock_to_bh_clock(!clock_id, &bh_clockdid))
+        return convert_errno(errno);
     if (os_clock_time_get(clock_id, precision, time) != BHT_OK)
         return convert_errno(errno);
     return __WASI_ESUCCESS;

@@ -66,11 +66,11 @@ os_vprintf(const char *format, va_list ap);
 uint64
 os_time_get_boot_microsecond(void);
 
-/*y*/
+/* Get current resolution of clock id */
 int
 os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution);
 
-/*t*/
+/* Get current time of the clock id */
 int
 os_clock_time_get(bh_clock_id_t clock_id, uint64 precision, uint64 *time);
 
