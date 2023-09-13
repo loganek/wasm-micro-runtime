@@ -11,10 +11,8 @@
 extern "C" {
 #endif
 
-
 uint64
 convert_timespec(const struct timespec *ts);
-
 
 #ifdef __cplusplus
 }

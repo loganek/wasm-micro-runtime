@@ -14,5 +14,3 @@ convert_timespec(const struct timespec *ts)
         return UINT64_MAX;
     return (uint64)ts->tv_sec * 1000000000 + (uint64)ts->tv_nsec;
 }
-
-

@@ -42,8 +42,7 @@ typedef enum {
     BH_CLOCK_ID_MONOTONIC,
     BH_CLOCK_ID_PROCESS_CPUTIME_ID,
     BH_CLOCK_ID_THREAD_CPUTIME_ID
-}bh_clock_id_t;
-
+} bh_clock_id_t;
 
 #if defined(_MSC_BUILD)
 #if defined(COMPILING_WASM_RUNTIME_API)
@@ -119,8 +118,6 @@ typedef uint64_t uint64;
 typedef int64_t int64;
 
 typedef void *(*thread_start_routine_t)(void *);
-
-
 
 #ifndef bh_socket_t
 /* If no socket defined on current platform,
