@@ -4,7 +4,6 @@
  */
 
 #include "platform_api_vmcore.h"
-#include "bh_platform.h"
 
 uint64
 os_time_get_boot_microsecond()

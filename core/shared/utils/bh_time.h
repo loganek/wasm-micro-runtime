@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
  */
 
+#include "bh_platform.h"
+
 #ifndef _BH_TIME_H
 #define _BH_TIME_H
 
@@ -16,4 +18,4 @@ convert_timespec(const struct timespec *ts);
 #ifdef __cplusplus
 }
 #endif
-#endif /* end of _BH_TIME_ */
+#endif /* end of _BH_TIME_H */

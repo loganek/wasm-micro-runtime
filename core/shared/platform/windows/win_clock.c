@@ -22,12 +22,13 @@ calculate_monotonic_clock_frequency()
 static uint64
 from_file_time_to_wasi_timestamp(FILETIME filetime)
 {
-    static const uint64 nTToUnixEpoch = 134774 * 86400 * NANOSECONDS_PER_SECOND;
+    static const uint64 ntto_unix_epoch =
+        134774 * 86400 * NANOSECONDS_PER_SECOND;
 
     ULARGE_INTEGER temp = { .LowPart = filetime.dwLowDateTime,
                             .HighPart = filetime.dwHighDateTime };
 
-    auto duration = temp.QuadPart - nTToUnixEpoch;
+    auto duration = temp.QuadPart - ntto_unix_epoch;
 
     return duration;
 }
@@ -55,7 +56,6 @@ os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution)
         case BH_CLOCK_ID_PROCESS_CPUTIME_ID:
         case BH_CLOCK_ID_THREAD_CPUTIME_ID:
         {
-
             PULONG maximumTime;
             PULONG minimumTime;
             PULONG currentTime;
@@ -67,6 +67,9 @@ os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution)
             *resolution = result / (uint64)NANOSECONDS_PER_SECOND;
             return BHT_OK;
         }
+        default:
+            errno = EINVAL;
+            return BHT_ERROR;
     }
 }
 
@@ -83,13 +86,13 @@ os_clock_time_get(bh_clock_id_t clock_id, uint64 precision, uint64 *time)
             GetSystemTimeAsFileTime(&SysNow);
 
 #endif
-            time = from_file_time_to_wasi_timestamp(sysNow);
+            *time = from_file_time_to_wasi_timestamp(sysNow);
             return BHT_OK;
         }
 
         case BH_CLOCK_ID_MONOTONIC:
         {
-            uint64 counter = calculate_monotonic_clock_frequency();
+            uint64 counter = current_value_of_peformance_counter();
             if (NANOSECONDS_PER_SECOND % calculate_monotonic_clock_frequency()
                 == 0) {
                 *time = counter
@@ -99,50 +102,53 @@ os_clock_time_get(bh_clock_id_t clock_id, uint64 precision, uint64 *time)
             else {
                 uint64 seconds =
                     counter / calculate_monotonic_clock_frequency();
-                uint64 Fractions =
+                uint64 fractions =
                     counter % calculate_monotonic_clock_frequency();
                 *time = seconds * NANOSECONDS_PER_SECOND
-                        + (Fractions * NANOSECONDS_PER_SECOND)
+                        + (fractions * NANOSECONDS_PER_SECOND)
                               / calculate_monotonic_clock_frequency();
             }
+        }
             return BHT_OK;
 
-            case BH_CLOCK_ID_PROCESS_CPUTIME_ID:
-            {
-                FILETIME creation_time;
-                FILETIME exit_time;
-                FILETIME kernal_time;
-                FILETIME user_time;
+        case BH_CLOCK_ID_PROCESS_CPUTIME_ID:
+        {
+            FILETIME creation_time;
+            FILETIME exit_time;
+            FILETIME kernal_time;
+            FILETIME user_time;
 
-                if (!GetProcessTimes(GetCurrentProcess(), &creation_time,
-                                     &exit_time, &kernal_time, &user_time)) {
-
-                    return BHT_ERROR;
-                }
-                time = from_file_time_to_wasi_timestamp(kernal_time)
-                       + from_file_time_to_wasi_timestamp(user_time);
-
-                return BHT_OK;
-            }
-
-            case BH_CLOCK_ID_THREAD_CPUTIME_ID:
-            {
-                FILETIME creation_time;
-                FILETIME exit_time;
-                FILETIME kernal_time;
-                FILETIME user_time;
-
-                if (!GetProcessTimes(GetCurrentThread(), &creation_time,
-                                     &exit_time, &kernal_time, &user_time)) {
-
-                    return BHT_ERROR;
-                }
-
-                time = from_file_time_to_wasi_timestamp(kernal_time)
-                       + from_file_time_to_wasi_timestamp(user_time);
+            if (!GetProcessTimes(GetCurrentProcess(), &creation_time,
+                                 &exit_time, &kernal_time, &user_time)) {
 
                 return BHT_ERROR;
             }
+            *time = from_file_time_to_wasi_timestamp(kernal_time)
+                    + from_file_time_to_wasi_timestamp(user_time);
+
+            return BHT_OK;
         }
+
+        case BH_CLOCK_ID_THREAD_CPUTIME_ID:
+        {
+            FILETIME creation_time;
+            FILETIME exit_time;
+            FILETIME kernal_time;
+            FILETIME user_time;
+
+            if (!GetProcessTimes(GetCurrentThread(), &creation_time, &exit_time,
+                                 &kernal_time, &user_time)) {
+
+                return BHT_ERROR;
+            }
+
+            *time = from_file_time_to_wasi_timestamp(kernal_time)
+                    + from_file_time_to_wasi_timestamp(user_time);
+
+            return BHT_ERROR;
+        }
+        default:
+            errno = EINVAL;
+            return BHT_ERROR;
     }
 }

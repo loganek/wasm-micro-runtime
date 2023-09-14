@@ -279,21 +279,25 @@ wasi_addr_ip_to_bh_ip_addr_buffer(__wasi_addr_ip_t *addr,
     }
 }
 
-bh_clock_id_t
-convert_clock_to_bh_clock(__wasi_clockid_t in, bh_clock_id_t *out)
+bool
+convert_wasi_clock_id_to_bh_clock_id(__wasi_clockid_t in, bh_clock_id_t *out)
 {
     switch (in) {
 
         case __WASI_CLOCK_MONOTONIC:
-            return BH_CLOCK_ID_MONOTONIC;
+            *out = BH_CLOCK_ID_MONOTONIC;
+            return true;
         case __WASI_CLOCK_PROCESS_CPUTIME_ID:
-            return BH_CLOCK_ID_PROCESS_CPUTIME_ID;
+            *out = BH_CLOCK_ID_PROCESS_CPUTIME_ID;
+            return true;
         case __WASI_CLOCK_REALTIME:
-            return BH_CLOCK_ID_REALTIME;
+            *out = BH_CLOCK_ID_REALTIME;
+            return true;
         case __WASI_CLOCK_THREAD_CPUTIME_ID:
-            return BH_CLOCK_ID_THREAD_CPUTIME_ID;
+            *out = BH_CLOCK_ID_THREAD_CPUTIME_ID;
+            return true;
         default:
-            return convert_errno(errno);
+            return false;
     }
 }
 
@@ -301,8 +305,8 @@ __wasi_errno_t
 wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
                            __wasi_timestamp_t *resolution)
 {
-    bh_clock_id_t bh_clockdid;
-    if (convert_clock_to_bh_clock(!clock_id, &bh_clockdid))
+    bh_clock_id_t bh_clockid;
+    if (!convert_wasi_clock_id_to_bh_clock_id(clock_id, &bh_clockid))
         return convert_errno(errno);
     if (os_clock_res_get(clock_id, resolution) != BHT_OK)
         return convert_errno(errno);
@@ -314,8 +318,8 @@ wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id,
                             __wasi_timestamp_t precision,
                             __wasi_timestamp_t *time)
 {
-    bh_clock_id_t bh_clockdid;
-    if (convert_clock_to_bh_clock(!clock_id, &bh_clockdid))
+    bh_clock_id_t bh_clockid;
+    if (!convert_wasi_clock_id_to_bh_clock_id(clock_id, &bh_clockid))
         return convert_errno(errno);
     if (os_clock_time_get(clock_id, precision, time) != BHT_OK)
         return convert_errno(errno);
@@ -1520,7 +1524,6 @@ wasmtime_ssp_fd_allocate(
     struct stat sb;
     int ret = fstat(fd_number(fo), &sb);
     off_t newsize = (off_t)(offset + len);
-
     if (ret == 0 && sb.st_size < newsize)
         ret = ftruncate(fd_number(fo), newsize);
 #endif
@@ -3801,8 +3804,7 @@ argv_environ_init(struct argv_environ_values *argv_environ, char *argv_buf,
 
 void
 argv_environ_destroy(struct argv_environ_values *argv_environ)
-{
-}
+{}
 
 void
 fd_table_destroy(struct fd_table *ft)
