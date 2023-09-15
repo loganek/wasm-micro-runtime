@@ -348,7 +348,7 @@ endif
 CSRCS += nuttx_platform.c \
          posix_thread.c \
          posix_time.c \
-	     posix_clock.c \
+         posix_clock.c \
          mem_alloc.c \
          ems_kfc.c \
          ems_alloc.c \

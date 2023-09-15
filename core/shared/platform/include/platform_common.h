@@ -125,6 +125,14 @@ typedef void *(*thread_start_routine_t)(void *);
 #define bh_socket_t int
 #endif
 
+/* Get current resolution of clock id returns BHT_OK on success and BHT_ERROR on failure */
+int
+os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution);
+
+/* Get current time of the clock id BHT_OK on success and BHT_ERROR on failure */
+int
+os_clock_time_get(bh_clock_id_t clock_id, uint64 precision, uint64 *time);
+
 /* Format specifiers macros in case
     they are not provided by compiler */
 #ifndef __PRI64_PREFIX

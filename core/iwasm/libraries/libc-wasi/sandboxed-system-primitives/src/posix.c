@@ -307,7 +307,7 @@ wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
 {
     bh_clock_id_t bh_clockid;
     if (!convert_wasi_clock_id_to_bh_clock_id(clock_id, &bh_clockid))
-        return convert_errno(errno);
+        return __WASI_EINVAL;
     if (os_clock_res_get(clock_id, resolution) != BHT_OK)
         return convert_errno(errno);
     return __WASI_ESUCCESS;
@@ -320,7 +320,7 @@ wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id,
 {
     bh_clock_id_t bh_clockid;
     if (!convert_wasi_clock_id_to_bh_clock_id(clock_id, &bh_clockid))
-        return convert_errno(errno);
+        return __WASI_EINVAL;
     if (os_clock_time_get(clock_id, precision, time) != BHT_OK)
         return convert_errno(errno);
     return __WASI_ESUCCESS;

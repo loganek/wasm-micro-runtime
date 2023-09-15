@@ -28,9 +28,7 @@ from_file_time_to_wasi_timestamp(FILETIME filetime)
     ULARGE_INTEGER temp = { .LowPart = filetime.dwLowDateTime,
                             .HighPart = filetime.dwHighDateTime };
 
-    auto duration = temp.QuadPart - ntto_unix_epoch;
-
-    return duration;
+    return temp.QuadPart - ntto_unix_epoch;
 }
 
 uint64
@@ -56,14 +54,14 @@ os_clock_res_get(bh_clock_id_t clock_id, uint64 *resolution)
         case BH_CLOCK_ID_PROCESS_CPUTIME_ID:
         case BH_CLOCK_ID_THREAD_CPUTIME_ID:
         {
-            PULONG maximumTime;
-            PULONG minimumTime;
-            PULONG currentTime;
+            PULONG maximum_time;
+            PULONG minimum_time;
+            PULONG current_time;
             NTSTATUS
-            status = NtQueryTimerResolution(&maximumTime, &minimumTime,
-                                            &currentTime);
+            status = NtQueryTimerResolution(&maximum_time, &minimum_time,
+                                            &current_time);
 
-            uint64 result = (uint64)currentTime * NANOSECONDS_PER_TICK;
+            uint64 result = (uint64)current_time * NANOSECONDS_PER_TICK;
             *resolution = result / (uint64)NANOSECONDS_PER_SECOND;
             return BHT_OK;
         }
@@ -93,20 +91,15 @@ os_clock_time_get(bh_clock_id_t clock_id, uint64 precision, uint64 *time)
         case BH_CLOCK_ID_MONOTONIC:
         {
             uint64 counter = current_value_of_peformance_counter();
-            if (NANOSECONDS_PER_SECOND % calculate_monotonic_clock_frequency()
-                == 0) {
-                *time = counter
-                        * (NANOSECONDS_PER_SECOND
-                           / calculate_monotonic_clock_frequency());
+            uint64 frequency =
+                calculate_monotonic_clock_frequency() / NANOSECONDS_PER_SECOND;
+            if (frequency % NANOSECONDS_PER_SECOND == 0) {
+                *time = counter * frequency;
             }
             else {
-                uint64 seconds =
-                    counter / calculate_monotonic_clock_frequency();
-                uint64 fractions =
-                    counter % calculate_monotonic_clock_frequency();
-                *time = seconds * NANOSECONDS_PER_SECOND
-                        + (fractions * NANOSECONDS_PER_SECOND)
-                              / calculate_monotonic_clock_frequency();
+                uint64 seconds = counter / frequency;
+                uint64 fractions = counter % frequency;
+                *time = (seconds + fractions) / frequency;
             }
         }
             return BHT_OK;
@@ -145,7 +138,7 @@ os_clock_time_get(bh_clock_id_t clock_id, uint64 precision, uint64 *time)
             *time = from_file_time_to_wasi_timestamp(kernal_time)
                     + from_file_time_to_wasi_timestamp(user_time);
 
-            return BHT_ERROR;
+            return BHT_OK;
         }
         default:
             errno = EINVAL;
