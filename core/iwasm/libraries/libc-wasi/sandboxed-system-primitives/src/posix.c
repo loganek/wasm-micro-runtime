@@ -179,6 +179,11 @@ convert_errno(int error)
 }
 
 static bool
+convert_clockid(__wasi_clockid_t in, bh_clock_id_t *out)
+{
+}
+
+static bool
 ns_lookup_list_search(char **list, const char *host)
 {
     size_t host_len = strlen(host), suffix_len;
@@ -283,7 +288,6 @@ bool
 convert_wasi_clock_id_to_bh_clock_id(__wasi_clockid_t in, bh_clock_id_t *out)
 {
     switch (in) {
-
         case __WASI_CLOCK_MONOTONIC:
             *out = BH_CLOCK_ID_MONOTONIC;
             return true;
@@ -310,6 +314,7 @@ wasmtime_ssp_clock_res_get(__wasi_clockid_t clock_id,
         return __WASI_EINVAL;
     if (os_clock_res_get(clock_id, resolution) != BHT_OK)
         return convert_errno(errno);
+    printf("Resolution: %llu\n", *resolution);
     return __WASI_ESUCCESS;
 }
 
@@ -323,6 +328,7 @@ wasmtime_ssp_clock_time_get(__wasi_clockid_t clock_id,
         return __WASI_EINVAL;
     if (os_clock_time_get(clock_id, precision, time) != BHT_OK)
         return convert_errno(errno);
+    printf("Timce: %llu\n", *time);
     return __WASI_ESUCCESS;
 }
 
@@ -561,13 +567,10 @@ fd_determine_type_rights(int fd, __wasi_filetype_t *type,
                          __wasi_rights_t *rights_base,
                          __wasi_rights_t *rights_inheriting)
 {
-#ifdef BH_PLATFORM_WINDOWS
-    return __WASI_ENOSYS;
-#else
     struct stat sb;
     if (fstat(fd, &sb) < 0)
         return convert_errno(errno);
-    if (S_ISBLK(sb.st_mode)) {
+    /* if (S_ISBLK(sb.st_mode)) {
         *type = __WASI_FILETYPE_BLOCK_DEVICE;
         *rights_base = RIGHTS_BLOCK_DEVICE_BASE;
         *rights_inheriting = RIGHTS_BLOCK_DEVICE_INHERITING;
@@ -622,7 +625,7 @@ fd_determine_type_rights(int fd, __wasi_filetype_t *type,
     else {
         return __WASI_EINVAL;
     }
-
+    
     // Strip off read/write bits based on the access mode.
     switch (fcntl(fd, F_GETFL) & O_ACCMODE) {
         case O_RDONLY:
@@ -631,9 +634,8 @@ fd_determine_type_rights(int fd, __wasi_filetype_t *type,
         case O_WRONLY:
             *rights_base &= ~(__wasi_rights_t)__WASI_RIGHT_FD_READ;
             break;
-    }
+    }*/
     return 0;
-#endif
 }
 
 // Returns the underlying file descriptor number of a file descriptor
@@ -691,14 +693,16 @@ fd_table_insert_existing(struct fd_table *ft, __wasi_fd_t in, int out)
 #ifdef BH_PLATFORM_WINDOWS
     return false;
 #else
-    __wasi_filetype_t type;
-    __wasi_rights_t rights_base, rights_inheriting;
+    __wasi_filetype_t type = __WASI_FILETYPE_UNKNOWN;
+    __wasi_rights_t rights_base = 0, rights_inheriting = 0;
     struct fd_object *fo;
     __wasi_errno_t error;
+
 
     error =
         fd_determine_type_rights(out, &type, &rights_base, &rights_inheriting);
     if (error != 0) {
+
 #ifdef BH_PLATFORM_EGO
         /**
          * since it is an already opened file and we can assume the opened file
@@ -708,6 +712,7 @@ fd_table_insert_existing(struct fd_table *ft, __wasi_fd_t in, int out)
             return false;
 #else
         return false;
+
 #endif
     }
 
@@ -720,7 +725,7 @@ fd_table_insert_existing(struct fd_table *ft, __wasi_fd_t in, int out)
             fd_object_release(fo);
             return false;
         }
-        fo->directory.handle = NULL;
+        //fo->directory.handle = NULL;
     }
 
     // Grow the file descriptor table if needed.
