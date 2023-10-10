@@ -5,6 +5,8 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
 
+THIS_DIR=$(cd $(dirname $0) && pwd -P)
+
 readonly MODE=$1
 readonly TARGET=$2
 
@@ -27,20 +29,23 @@ readonly WAMR_DIR="${WORK_DIR}/../../../.."
 readonly IWASM_CMD="${IWASM_EXE} \
     --allow-resolve=google-public-dns-a.google.com \
     --addr-pool=::1/128,127.0.0.1/32"
-readonly IWASM_CMD_STRESS="${IWASM_CMD} --max-threads=8"
+
+readonly IWASM_CMD_STRESS="${IWASM_CMD} --max-threads=12"
 readonly WAMRC_CMD="${WORK_DIR}/../../../../wamr-compiler/build/wamrc"
 readonly C_TESTS="tests/c/testsuite/"
+readonly RUST_TESTS="tests/rust/testsuite/"
 readonly ASSEMBLYSCRIPT_TESTS="tests/assemblyscript/testsuite/"
 readonly THREAD_PROPOSAL_TESTS="tests/proposals/wasi-threads/"
 readonly THREAD_INTERNAL_TESTS="${WAMR_DIR}/core/iwasm/libraries/lib-wasi-threads/test/"
+readonly THREAD_STRESS_TESTS="${WAMR_DIR}/core/iwasm/libraries/lib-wasi-threads/stress-test/"
 readonly LIB_SOCKET_TESTS="${WAMR_DIR}/core/iwasm/libraries/lib-socket/test/"
 
 run_aot_tests () {
     local tests=("$@")
     for test_wasm in ${tests[@]}; do
-        local extra_stress_flags=""
-        if [[ "$test_wasm" =~ "stress" ]]; then
-            extra_stress_flags="--max-threads=8"
+        local iwasm="${IWASM_CMD}"
+        if [[ $test_wasm =~ "stress" ]]; then
+            iwasm="${IWASM_CMD_STRESS}"
         fi
 
         test_aot="${test_wasm%.wasm}.aot"
@@ -60,9 +65,8 @@ run_aot_tests () {
             expected=$(jq .exit_code ${test_json})
         fi
 
-        ${IWASM_CMD} $extra_stress_flags $test_aot
-
-        ret=${PIPESTATUS[0]}
+        $PYTHON_EXE ${THIS_DIR}/pipe.py | ${iwasm} $test_aot
+        ret=${PIPESTATUS[1]}
 
         echo "expected=$expected, actual=$ret"
         if [[ $expected != "" ]] && [[ $expected != $ret ]];then
@@ -74,31 +78,30 @@ run_aot_tests () {
 if [[ $MODE != "aot" ]];then
     $PYTHON_EXE -m venv wasi-env && source wasi-env/${VENV_BIN_DIR}/activate
     $PYTHON_EXE -m pip install -r test-runner/requirements.txt
-
-    # Stress test requires max-threads=8 so it's run separately
-    if [[ -e "${THREAD_INTERNAL_TESTS}spawn_stress_test.wasm" ]]; then
-        ${IWASM_CMD_STRESS} ${THREAD_INTERNAL_TESTS}spawn_stress_test.wasm
-        ret=${PIPESTATUS[0]}
-        if [ "${ret}" -ne 0 ]; then
-            echo "Stress test spawn_stress_test FAILED with code " ${ret}
-            exit_code=${ret}
-        fi
-    fi
-
-    TEST_RUNTIME_EXE="${IWASM_CMD}" $PYTHON_EXE test-runner/wasi_test_runner.py \
+    export TEST_RUNTIME_EXE="${IWASM_CMD}"
+    $PYTHON_EXE ${THIS_DIR}/pipe.py | $PYTHON_EXE test-runner/wasi_test_runner.py \
             -r adapters/wasm-micro-runtime.py \
             -t \
                 ${C_TESTS} \
+                ${RUST_TESTS} \
                 ${ASSEMBLYSCRIPT_TESTS} \
                 ${THREAD_PROPOSAL_TESTS} \
                 ${THREAD_INTERNAL_TESTS} \
                 ${LIB_SOCKET_TESTS} \
-            --exclude-filter "${THREAD_INTERNAL_TESTS}skip.json"
 
-    ret=${PIPESTATUS[0]}
-    if [ "${ret}" -ne 0 ]; then
-        exit_code=${ret}
+    ret=${PIPESTATUS[1]}
+
+    TEST_RUNTIME_EXE="${IWASM_CMD_STRESS}" $PYTHON_EXE test-runner/wasi_test_runner.py \
+            -r adapters/wasm-micro-runtime.py \
+            -t \
+                ${THREAD_STRESS_TESTS}
+
+    if [ "${ret}" -eq 0 ]; then
+        ret=${PIPESTATUS[0]}
     fi
+    
+    exit_code=${ret}
+    
     deactivate
 else
     target_option=""
@@ -107,7 +110,7 @@ else
     fi
 
     exit_code=0
-    for testsuite in ${THREAD_PROPOSAL_TESTS} ${THREAD_INTERNAL_TESTS}; do
+    for testsuite in ${THREAD_STRESS_TESTS} ${THREAD_PROPOSAL_TESTS} ${THREAD_INTERNAL_TESTS}; do
         tests=$(ls ${testsuite}*.wasm)
         tests_array=($tests)
         run_aot_tests "${tests_array[@]}"
