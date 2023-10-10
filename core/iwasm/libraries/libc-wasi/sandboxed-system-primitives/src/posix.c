@@ -172,11 +172,10 @@ convert_errno(int error)
 #undef X
     return code;
 }
-
-static bool
-convert_clockid(__wasi_clockid_t in, bh_clock_id_t *out)
-{
-}
+#ifndef BH_PLATFORM_WINDOWS
+bool
+convert_clockid(__wasi_clockid_t in, clockid_t *out);
+#endif
 
 static bool
 ns_lookup_list_search(char **list, const char *host)
