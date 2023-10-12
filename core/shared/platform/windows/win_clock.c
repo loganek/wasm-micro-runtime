@@ -91,15 +91,15 @@ os_clock_time_get(bh_clock_id_t clock_id, uint64 precision, uint64 *time)
         case BH_CLOCK_ID_MONOTONIC:
         {
             uint64 counter = current_value_of_peformance_counter();
-            uint64 frequency =
-                calculate_monotonic_clock_frequency() / NANOSECONDS_PER_SECOND;
-            if (frequency % NANOSECONDS_PER_SECOND == 0) {
-                *time = counter * frequency;
+            uint64 frequency = calculate_monotonic_clock_frequency();
+            if (NANOSECONDS_PER_SECOND % frequency == 0) {
+                *time = counter * NANOSECONDS_PER_SECOND / frequency;
             }
             else {
                 uint64 seconds = counter / frequency;
                 uint64 fractions = counter % frequency;
-                *time = (seconds + fractions) / frequency;
+                *time = seconds * NANOSECONDS_PER_SECOND
+                        + (fractions * NANOSECONDS_PER_SECOND) / frequency;
             }
         }
             return BHT_OK;
