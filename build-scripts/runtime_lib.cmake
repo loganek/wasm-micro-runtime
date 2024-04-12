@@ -108,6 +108,11 @@ if (WAMR_BUILD_WASI_NN EQUAL 1)
     include (${IWASM_DIR}/libraries/wasi-nn/cmake/wasi_nn.cmake)
 endif ()
 
+if (WAMR_BUILD_LIB_ALLOC_TRACKER EQUAL 1)
+    include (${IWASM_DIR}/libraries/lib-alloc-tracker/lib_alloc_tracker.cmake)
+    set (WAMR_BUILD_DUMP_CALL_STACK 1)
+endif ()
+
 if (WAMR_BUILD_LIB_PTHREAD EQUAL 1)
     if (WAMR_BUILD_PLATFORM STREQUAL "windows")
         set (WAMR_BUILD_LIB_PTHREAD_SEMAPHORE 0)
@@ -212,6 +217,7 @@ set (source_all
     ${IWASM_GC_SOURCE}
     ${LIB_WASI_THREADS_SOURCE}
     ${LIB_PTHREAD_SOURCE}
+    ${LIB_ALLOC_TRACKER_SOURCE}
     ${THREAD_MGR_SOURCE}
     ${LIBC_EMCC_SOURCE}
     ${LIB_RATS_SOURCE}
