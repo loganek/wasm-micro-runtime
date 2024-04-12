@@ -42,6 +42,17 @@ get_base_lib_export_apis(NativeSymbol **p_base_lib_apis);
 uint32
 get_ext_lib_export_apis(NativeSymbol **p_ext_lib_apis);
 
+#if WASM_ENABLE_LIB_ALLOC_TRACKER != 0
+uint32
+get_lib_alloc_tracker_export_apis(NativeSymbol **p_lib_alloc_tracker_apis);
+
+bool
+lib_alloc_tracker_init(void);
+
+void
+lib_alloc_tracker_destroy(void);
+#endif
+
 #if WASM_ENABLE_LIB_PTHREAD != 0
 bool
 lib_pthread_init();
@@ -479,7 +490,8 @@ wasm_native_init()
     || WASM_ENABLE_BASE_LIB != 0 || WASM_ENABLE_LIBC_EMCC != 0      \
     || WASM_ENABLE_LIB_RATS != 0 || WASM_ENABLE_WASI_NN != 0        \
     || WASM_ENABLE_APP_FRAMEWORK != 0 || WASM_ENABLE_LIBC_WASI != 0 \
-    || WASM_ENABLE_LIB_PTHREAD != 0 || WASM_ENABLE_LIB_WASI_THREADS != 0
+    || WASM_ENABLE_LIB_PTHREAD != 0 || WASM_ENABLE_LIB_WASI_THREADS != 0 \
+    || WASM_ENABLE_LIB_ALLOC_TRACKER != 0
     NativeSymbol *native_symbols;
     uint32 n_native_symbols;
 #endif
@@ -521,6 +533,17 @@ wasm_native_init()
 
 #if WASM_ENABLE_APP_FRAMEWORK != 0
     n_native_symbols = get_ext_lib_export_apis(&native_symbols);
+    if (n_native_symbols > 0
+        && !wasm_native_register_natives("env", native_symbols,
+                                         n_native_symbols))
+        goto fail;
+#endif
+
+#if WASM_ENABLE_LIB_ALLOC_TRACKER != 0
+    if (!lib_alloc_tracker_init())
+        goto fail;
+
+    n_native_symbols = get_lib_alloc_tracker_export_apis(&native_symbols);
     if (n_native_symbols > 0
         && !wasm_native_register_natives("env", native_symbols,
                                          n_native_symbols))
@@ -583,7 +606,8 @@ wasm_native_init()
     || WASM_ENABLE_BASE_LIB != 0 || WASM_ENABLE_LIBC_EMCC != 0      \
     || WASM_ENABLE_LIB_RATS != 0 || WASM_ENABLE_WASI_NN != 0        \
     || WASM_ENABLE_APP_FRAMEWORK != 0 || WASM_ENABLE_LIBC_WASI != 0 \
-    || WASM_ENABLE_LIB_PTHREAD != 0 || WASM_ENABLE_LIB_WASI_THREADS != 0
+    || WASM_ENABLE_LIB_PTHREAD != 0 || WASM_ENABLE_LIB_WASI_THREADS != 0 \
+    || WASM_ENABLE_LIB_ALLOC_TRACKER != 0
         goto fail;
 #else
         return false;
@@ -596,7 +620,8 @@ wasm_native_init()
     || WASM_ENABLE_BASE_LIB != 0 || WASM_ENABLE_LIBC_EMCC != 0      \
     || WASM_ENABLE_LIB_RATS != 0 || WASM_ENABLE_WASI_NN != 0        \
     || WASM_ENABLE_APP_FRAMEWORK != 0 || WASM_ENABLE_LIBC_WASI != 0 \
-    || WASM_ENABLE_LIB_PTHREAD != 0 || WASM_ENABLE_LIB_WASI_THREADS != 0
+    || WASM_ENABLE_LIB_PTHREAD != 0 || WASM_ENABLE_LIB_WASI_THREADS != 0 \
+    || WASM_ENABLE_LIB_ALLOC_TRACKER != 0
 fail:
     wasm_native_destroy();
     return false;
@@ -620,6 +645,10 @@ wasm_native_destroy()
 
 #if WASM_ENABLE_LIB_WASI_THREADS != 0
     lib_wasi_threads_destroy();
+#endif
+
+#if WASM_ENABLE_LIB_ALLOC_TRACKER != 0
+    lib_alloc_tracker_destroy();
 #endif
 
     node = g_native_symbols_list;
