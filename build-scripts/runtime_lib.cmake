@@ -103,6 +103,8 @@ if (WAMR_BUILD_WASI_NN EQUAL 1)
     include (${IWASM_DIR}/libraries/wasi-nn/cmake/wasi_nn.cmake)
 endif ()
 
+include (${IWASM_DIR}/libraries/lib-dynlink/lib_dynlink.cmake)
+
 if (WAMR_BUILD_LIB_PTHREAD EQUAL 1)
     include (${IWASM_DIR}/libraries/lib-pthread/lib_pthread.cmake)
     # Enable the dependent feature if lib pthread is enabled
@@ -189,6 +191,7 @@ set (source_all
     ${IWASM_GC_SOURCE}
     ${LIB_WASI_THREADS_SOURCE}
     ${LIB_PTHREAD_SOURCE}
+    ${LIB_DYNLINK_SOURCE}
     ${THREAD_MGR_SOURCE}
     ${LIBC_EMCC_SOURCE}
     ${LIB_RATS_SOURCE}
