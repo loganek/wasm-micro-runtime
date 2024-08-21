@@ -692,6 +692,11 @@ bool
 aot_alloc_frame(WASMExecEnv *exec_env, uint32 func_index);
 
 void
+tiny_track_new_frame(WASMExecEnv *exec_env, uint32 func_index);
+
+void tiny_track_free_frame(WASMExecEnv *exec_env);
+
+void
 aot_free_frame(WASMExecEnv *exec_env);
 
 void

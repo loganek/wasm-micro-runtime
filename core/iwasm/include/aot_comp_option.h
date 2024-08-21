@@ -6,6 +6,12 @@
 #ifndef __AOT_COMP_OPTION_H__
 #define __AOT_COMP_OPTION_H__
 
+typedef enum {
+    AOT_SIMPLE_TRACK_STACK_NONE,
+    AOT_SIMPLE_TRACK_STACK_AOT,
+    AOT_SIMPLE_TRACK_STACK_NATIVE_CALL,
+} AOTSimpleTrackStackMode;
+
 typedef struct AOTCompOption {
     bool is_jit_mode;
     bool is_indirect_mode;
@@ -36,6 +42,7 @@ typedef struct AOTCompOption {
     uint32_t bounds_checks;
     uint32_t stack_bounds_checks;
     uint32_t segue_flags;
+    AOTSimpleTrackStackMode simple_track_stack_mode;
     char **custom_sections;
     uint32_t custom_sections_count;
     const char *stack_usage_file;

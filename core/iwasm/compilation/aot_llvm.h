@@ -412,6 +412,8 @@ typedef struct AOTCompContext {
     /* Generate auxiliary stack frame */
     bool enable_aux_stack_frame;
 
+    AOTSimpleTrackStackMode simple_track_stack_mode;
+
     /* Function performance profiling */
     bool enable_perf_profiling;
 

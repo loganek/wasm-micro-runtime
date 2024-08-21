@@ -2394,8 +2394,11 @@ aot_call_function(WASMExecEnv *exec_env, AOTFunctionInstance *function,
         /* Free all frames allocated, note that some frames
            may be allocated in AOT code and haven't been
            freed if exception occurred */
-        while (exec_env->cur_frame != prev_frame)
-            aot_free_frame(exec_env);
+        // TODO hack hack hack
+        if ((AOTFrame *)exec_env->cur_frame  - ((AOTFrame *)exec_env->cur_frame)->prev_frame <= 0x100) {
+            while (exec_env->cur_frame != prev_frame)
+                aot_free_frame(exec_env);
+        }
 #endif
 
         return ret && !aot_copy_exception(module_inst, NULL) ? true : false;
@@ -3614,6 +3617,19 @@ get_func_name_from_index(const AOTModuleInstance *module_inst,
 #endif /* end of WASM_ENABLE_DUMP_CALL_STACK != 0 || \
           WASM_ENABLE_PERF_PROFILING != 0 */
 
+void
+tiny_track_new_frame(WASMExecEnv *exec_env, uint32 func_index)
+{
+    *(uint32 *)exec_env->wasm_stack.top = func_index;
+    exec_env->wasm_stack.top += sizeof(void *);
+}
+
+void
+tiny_track_free_frame(WASMExecEnv *exec_env)
+{
+    exec_env->wasm_stack.top -= sizeof(void *);
+}
+
 #if WASM_ENABLE_GC == 0
 bool
 aot_alloc_frame(WASMExecEnv *exec_env, uint32 func_index)
@@ -3829,10 +3845,21 @@ aot_create_call_stack(struct WASMExecEnv *exec_env)
     AOTModuleInstance *module_inst = (AOTModuleInstance *)exec_env->module_inst;
     AOTModule *module = (AOTModule *)module_inst->module;
     uint32 n = 0;
+    uint8 *stack_ptr = exec_env->wasm_stack.top;
 
-    while (cur_frame) {
-        cur_frame = cur_frame->prev_frame;
-        n++;
+    // TODO hack hack hack
+    bool is_simple = (cur_frame - cur_frame->prev_frame > 0x100);
+
+    if (is_simple) {
+        n = (exec_env->wasm_stack.top - exec_env->wasm_stack.bottom)
+            / sizeof(void *);
+    }
+    else {
+        while (cur_frame) {
+            cur_frame = cur_frame->prev_frame;
+            n++;
+        }
+        cur_frame = first_frame;
     }
 
     /* release previous stack frames and create new ones */
@@ -3841,8 +3868,19 @@ aot_create_call_stack(struct WASMExecEnv *exec_env)
         return false;
     }
 
-    cur_frame = first_frame;
-    while (cur_frame) {
+    // cur_frame = first_frame;
+    while (true) {
+        AOTFrame f;
+        if (is_simple) {
+            if (stack_ptr < exec_env->wasm_stack.bottom) {
+                break;
+            }
+            f.func_index = *(uint32 *)stack_ptr;
+            cur_frame = &f;
+        }
+        else if (!is_simple && !cur_frame) {
+            break;
+        }
         WASMCApiFrame frame = { 0 };
         uint32 max_local_cell_num, max_stack_cell_num;
         uint32 all_cell_num, lp_size;
@@ -3903,7 +3941,12 @@ aot_create_call_stack(struct WASMExecEnv *exec_env)
             return false;
         }
 
-        cur_frame = cur_frame->prev_frame;
+        if (is_simple) {
+            stack_ptr -= sizeof(void *);
+        }
+        else {
+            cur_frame = cur_frame->prev_frame;
+        }
     }
 
     return true;
@@ -3958,8 +4001,9 @@ aot_dump_call_stack(WASMExecEnv *exec_env, bool print, char *buf, uint32 len)
         }
         else {
             line_length = snprintf(line_buf, sizeof(line_buf),
-                                   "#%02" PRIu32 ": 0x%04x - %s\n", n,
-                                   frame.func_offset, frame.func_name_wp);
+                                   "#%02" PRIu32 ": 0x%04x - %s (%d)\n", n,
+                                   frame.func_offset, frame.func_name_wp,
+                                   frame.func_index);
         }
 
         if (line_length >= sizeof(line_buf)) {

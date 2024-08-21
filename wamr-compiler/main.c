@@ -345,6 +345,7 @@ main(int argc, char *argv[])
     bool enable_linux_perf = false;
 #endif
 
+    option.simple_track_stack_mode = AOT_SIMPLE_TRACK_STACK_NONE;
     option.opt_level = 3;
     option.size_level = 3;
     option.output_format = AOT_FORMAT_FILE;
@@ -475,6 +476,19 @@ main(int argc, char *argv[])
         else if (!strcmp(argv[0], "--enable-perf-profiling")) {
             option.enable_aux_stack_frame = true;
             option.enable_perf_profiling = true;
+        }
+        else if (!strncmp(argv[0], "--simple-track-stack-mode=", 26)) {
+            if (argv[0][26] == '\0')
+                PRINT_HELP_AND_EXIT();
+            if (!strcmp(argv[0] + 26, "aot")) {
+                option.simple_track_stack_mode = AOT_SIMPLE_TRACK_STACK_AOT;
+            } else if (!strcmp(argv[0] + 26, "native-call")) {
+                option.simple_track_stack_mode = AOT_SIMPLE_TRACK_STACK_NATIVE_CALL;
+            } else if (!strcmp(argv[0] + 26, "none")) {
+                option.simple_track_stack_mode = AOT_SIMPLE_TRACK_STACK_NONE;
+            } else {
+                PRINT_HELP_AND_EXIT();
+            }
         }
         else if (!strcmp(argv[0], "--enable-memory-profiling")) {
             option.enable_memory_profiling = true;

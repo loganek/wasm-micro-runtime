@@ -497,6 +497,94 @@ fail:
 
 #if WASM_ENABLE_AOT_STACK_FRAME != 0
 static bool
+simple_track_stack_aot(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
+                       LLVMValueRef func_idx)
+{
+    LLVMValueRef offset = I32_ELEVEN;
+    LLVMValueRef wasm_stack_top_ptr = LLVMBuildInBoundsGEP2(
+        comp_ctx->builder, OPQ_PTR_TYPE, func_ctx->exec_env, &offset, 1,
+        "wasm_stack_top_ptr");
+    LLVMValueRef wasm_stack_top =
+        LLVMBuildLoad2(comp_ctx->builder, INT8_PTR_TYPE, wasm_stack_top_ptr,
+                       "wasm_stack_top_load");
+    LLVMBuildStore(comp_ctx->builder, func_idx, wasm_stack_top);
+
+    offset = I32_CONST(1);
+    LLVMValueRef wasm_stack_top_new =
+        LLVMBuildInBoundsGEP2(comp_ctx->builder, INT8_PTR_TYPE, wasm_stack_top,
+                              &offset, 1, "wasm_stack_top_new");
+    LLVMBuildStore(comp_ctx->builder, wasm_stack_top_new, wasm_stack_top_ptr);
+
+    return true;
+}
+
+static bool
+simple_track_stack_native_call(AOTCompContext *comp_ctx,
+                               AOTFuncContext *func_ctx, LLVMValueRef func_idx)
+{
+    LLVMValueRef param_values[2], value, func;
+    LLVMTypeRef param_types[2], ret_type, func_type, func_ptr_type;
+
+    param_types[0] = comp_ctx->exec_env_type;
+    param_types[1] = I32_TYPE;
+    ret_type = VOID_TYPE;
+
+    GET_AOT_FUNCTION(tiny_track_new_frame, 2);
+
+    param_values[0] = func_ctx->exec_env;
+    param_values[1] = func_idx;
+
+    LLVMBuildCall2(comp_ctx->builder, func_type, func, param_values, 2, "");
+    return true;
+
+fail:
+    return false;
+}
+
+static bool
+simple_track_stack_pop_aot(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx)
+{
+    LLVMValueRef offset = I32_ELEVEN;
+    LLVMValueRef wasm_stack_top_ptr = LLVMBuildInBoundsGEP2(
+        comp_ctx->builder, OPQ_PTR_TYPE, func_ctx->exec_env, &offset, 1,
+        "wasm_stack_top_ptr");
+
+    LLVMValueRef wasm_stack_top =
+        LLVMBuildLoad2(comp_ctx->builder, INT8_PTR_TYPE, wasm_stack_top_ptr,
+                       "wasm_stack_top_load");
+
+    offset = I32_CONST(-1);
+    LLVMValueRef wasm_stack_top_new =
+        LLVMBuildInBoundsGEP2(comp_ctx->builder, INT8_PTR_TYPE, wasm_stack_top,
+                              &offset, 1, "wasm_stack_top_new");
+
+    LLVMBuildStore(comp_ctx->builder, wasm_stack_top_new, wasm_stack_top_ptr);
+
+    return true;
+}
+
+static bool
+simple_track_stack_pop_native_call(AOTCompContext *comp_ctx,
+                                   AOTFuncContext *func_ctx)
+{
+    LLVMValueRef param_values[1], value, func;
+    LLVMTypeRef param_types[1], ret_type, func_type, func_ptr_type;
+
+    param_types[0] = comp_ctx->exec_env_type;
+    ret_type = VOID_TYPE;
+
+    GET_AOT_FUNCTION(tiny_track_free_frame, 1);
+
+    param_values[0] = func_ctx->exec_env;
+
+    LLVMBuildCall2(comp_ctx->builder, func_type, func, param_values, 1, "");
+    return true;
+
+fail:
+    return false;
+}
+
+static bool
 call_aot_alloc_frame_func(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
                           LLVMValueRef func_idx)
 {
@@ -1438,12 +1526,25 @@ aot_compile_op_call(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
             return false;
     }
 
-    if (comp_ctx->enable_aux_stack_frame) {
 #if WASM_ENABLE_AOT_STACK_FRAME != 0
+    if (comp_ctx->enable_aux_stack_frame) {
         if (!alloc_frame_for_aot_func(comp_ctx, func_ctx, func_idx))
             return false;
-#endif
     }
+    else {
+        switch (comp_ctx->simple_track_stack_mode) {
+            case AOT_SIMPLE_TRACK_STACK_AOT:
+                simple_track_stack_aot(comp_ctx, func_ctx, I32_CONST(func_idx));
+                break;
+            case AOT_SIMPLE_TRACK_STACK_NATIVE_CALL:
+                simple_track_stack_native_call(comp_ctx, func_ctx,
+                                               I32_CONST(func_idx));
+                break;
+            default:
+                break;
+        }
+    }
+#endif
 
     /* Get param cell number */
     param_cell_num = func_type->param_cell_num;
@@ -1804,12 +1905,24 @@ aot_compile_op_call(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
         }
     }
 
-    if (comp_ctx->enable_aux_stack_frame) {
 #if WASM_ENABLE_AOT_STACK_FRAME != 0
+    if (comp_ctx->enable_aux_stack_frame) {
         if (!free_frame_for_aot_func(comp_ctx, func_ctx))
             goto fail;
-#endif
     }
+    else {
+        switch (comp_ctx->simple_track_stack_mode) {
+            case AOT_SIMPLE_TRACK_STACK_AOT:
+                simple_track_stack_pop_aot(comp_ctx, func_ctx);
+                break;
+            case AOT_SIMPLE_TRACK_STACK_NATIVE_CALL:
+                simple_track_stack_pop_native_call(comp_ctx, func_ctx);
+                break;
+            default:
+                break;
+        }
+    }
+#endif
 
     /* Insert suspend check point */
     if (comp_ctx->enable_thread_mgr) {

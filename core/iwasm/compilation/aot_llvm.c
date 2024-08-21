@@ -2356,7 +2356,7 @@ jit_stack_size_callback(void *user_data, const char *name, size_t namelen,
     stack_consumption_to_call_wrapped_func =
         musttail ? 0
                  : aot_estimate_stack_usage_for_function_call(
-                     comp_ctx, func_ctx->aot_func->func_type);
+                       comp_ctx, func_ctx->aot_func->func_type);
     LOG_VERBOSE("func %.*s stack %u + %zu + %u", (int)namelen, name,
                 stack_consumption_to_call_wrapped_func, stack_size, call_size);
 
@@ -2571,6 +2571,8 @@ aot_create_comp_context(const AOTCompData *comp_data, aot_comp_option_t option)
 
     if (option->enable_aux_stack_frame)
         comp_ctx->enable_aux_stack_frame = true;
+
+    comp_ctx->simple_track_stack_mode = option->simple_track_stack_mode;
 
     if (option->enable_perf_profiling)
         comp_ctx->enable_perf_profiling = true;
