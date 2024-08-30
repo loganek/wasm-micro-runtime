@@ -591,7 +591,7 @@ aot_gen_commit_sp_ip(AOTCompFrame *frame, bool commit_sp, bool commit_ip)
         offset_sp = offsetof(WASMInterpFrame, sp);
     }
 
-    if (commit_ip) {
+    if (commit_ip && comp_ctx->call_stack_features.ip) {
         if (!(value_offset = I32_CONST(offset_ip))) {
             aot_set_last_error("llvm build const failed");
             return false;
@@ -636,7 +636,7 @@ aot_gen_commit_sp_ip(AOTCompFrame *frame, bool commit_sp, bool commit_ip)
         }
     }
 
-    if (commit_sp) {
+    if (commit_sp  && comp_ctx->call_stack_features.sp) {
         n = (uint32)(sp - frame->lp);
         value = I32_CONST(offset_of_local(comp_ctx, n));
         if (!value) {
@@ -962,7 +962,7 @@ aot_compile_func(AOTCompContext *comp_ctx, uint32 func_index)
     LLVMMetadataRef location;
 #endif
 
-    if (comp_ctx->enable_aux_stack_frame) {
+    if (comp_ctx->aux_stack_frame) {
         if (!init_comp_frame(comp_ctx, func_ctx, func_index)) {
             return false;
         }

@@ -3828,6 +3828,23 @@ aot_frame_update_profile_info(WASMExecEnv *exec_env, bool alloc_frame)
 #endif /* end of WASM_ENABLE_AOT_STACK_FRAME != 0 */
 
 #if WASM_ENABLE_DUMP_CALL_STACK != 0
+static AOTFrame *
+get_prev_frame(WASMExecEnv *exec_env, AOTFrame *cur_frame)
+{
+    AOTModuleInstance *module_inst = (AOTModuleInstance *)exec_env->module_inst;
+    AOTModule *module = (AOTModule *)module_inst->module;
+
+    if (module->feature_flags & WASM_FEATURE_OPTIMIZED_CALL_STACK) {
+        if (cur_frame == (AOTFrame *)exec_env->wasm_stack.bottom) {
+            return NULL;
+        }
+        return (AOTFrame *)((uint8 *)cur_frame - offsetof(AOTFrame, lp));
+    }
+    else {
+        return cur_frame->prev_frame;
+    }
+}
+
 bool
 aot_create_call_stack(struct WASMExecEnv *exec_env)
 {
@@ -3838,7 +3855,7 @@ aot_create_call_stack(struct WASMExecEnv *exec_env)
     uint32 n = 0;
 
     while (cur_frame) {
-        cur_frame = cur_frame->prev_frame;
+        cur_frame = get_prev_frame(exec_env, cur_frame);
         n++;
     }
 
@@ -3849,7 +3866,7 @@ aot_create_call_stack(struct WASMExecEnv *exec_env)
     }
 
     cur_frame = first_frame;
-    while (cur_frame) {
+    while (n-- > 0) {
         WASMCApiFrame frame = { 0 };
         uint32 max_local_cell_num, max_stack_cell_num;
         uint32 all_cell_num, lp_size;
@@ -3910,7 +3927,7 @@ aot_create_call_stack(struct WASMExecEnv *exec_env)
             return false;
         }
 
-        cur_frame = cur_frame->prev_frame;
+        cur_frame = get_prev_frame(exec_env, cur_frame);
     }
 
     return true;

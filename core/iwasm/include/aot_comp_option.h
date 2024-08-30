@@ -6,6 +6,42 @@
 #ifndef __AOT_COMP_OPTION_H__
 #define __AOT_COMP_OPTION_H__
 
+typedef struct {
+    /* Enables or disables bounds checks for stack frames. When enabled, the AOT
+     * compiler generates code to check if the stack pointer is within the
+     * bounds of the current stack frame (and if not, traps). */
+    bool stack_frame_bounds_checks;
+
+    /*  Enables or disables instruction pointer (IP) tracking.*/
+    bool ip;
+
+    /* Enables or disables tracking instruction pointer of a trap. Only takes
+     * effect when `ip` is enabled.*/
+    bool trap_ip;
+
+    /* Enables or disables stack pointer (SP) tracking. */
+    bool sp;
+    /* Enables or disables imported functions' parameters tracking. */
+    bool params;
+} AOTCallStackFeatures;
+
+typedef enum {
+    /* Stack traces disabled */
+    AOT_AUX_STACK_FRAME_OFF = 0,
+    /*
+     * Stack traces enabled, only available in no-GC no-profiling mode.
+     * In the optimized mode the AOTFrame frame has a fixed size and
+     * AOTFrame::prev_frame is not being used.
+     */
+    AOT_AUX_STACK_FRAME_OPTIMIZED,
+    /*
+     * Stack traces enabled, available for all the other configurations.
+     * In this mode AOTFrame::prev_frame is used to keep track of the
+     * previous frame.
+     */
+    AOT_AUX_STACK_FRAME_FULL,
+} AOTAuxStackFrameMode;
+
 typedef struct AOTCompOption {
     bool is_jit_mode;
     bool is_indirect_mode;
@@ -21,7 +57,8 @@ typedef struct AOTCompOption {
     bool enable_ref_types;
     bool enable_gc;
     bool enable_aux_stack_check;
-    bool enable_aux_stack_frame;
+    AOTAuxStackFrameMode aux_stack_frame;
+    AOTCallStackFeatures call_stack_features;
     bool enable_perf_profiling;
     bool enable_memory_profiling;
     bool disable_llvm_intrinsics;

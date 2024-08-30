@@ -410,7 +410,10 @@ typedef struct AOTCompContext {
     bool enable_aux_stack_check;
 
     /* Generate auxiliary stack frame */
-    bool enable_aux_stack_frame;
+    AOTAuxStackFrameMode aux_stack_frame;
+
+    /* Auxiliary call stack features */
+    AOTCallStackFeatures call_stack_features;
 
     /* Function performance profiling */
     bool enable_perf_profiling;

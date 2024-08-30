@@ -4424,6 +4424,9 @@ aot_obj_data_create(AOTCompContext *comp_ctx)
     if (comp_ctx->enable_bulk_memory) {
         obj_data->target_info.feature_flags |= WASM_FEATURE_BULK_MEMORY;
     }
+    if (comp_ctx->aux_stack_frame == AOT_AUX_STACK_FRAME_OPTIMIZED) {
+        obj_data->target_info.feature_flags |= WASM_FEATURE_OPTIMIZED_CALL_STACK;
+    }
     if (comp_ctx->enable_thread_mgr) {
         obj_data->target_info.feature_flags |= WASM_FEATURE_MULTI_THREAD;
     }

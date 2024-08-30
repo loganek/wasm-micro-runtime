@@ -1038,23 +1038,25 @@ create_aux_stack_frame(const AOTCompContext *comp_ctx, AOTFuncContext *func_ctx)
     }
 
     /* Get exec_env->wasm_stack.top_boundary and its address */
-    offset = I32_TEN;
-    if (!(wasm_stack_top_bound_ptr = LLVMBuildInBoundsGEP2(
-              comp_ctx->builder, OPQ_PTR_TYPE, func_ctx->exec_env, &offset, 1,
-              "wasm_stack_top_bound_ptr"))
-        || !(func_ctx->wasm_stack_top_bound = LLVMBuildLoad2(
-                 comp_ctx->builder, INT8_PTR_TYPE, wasm_stack_top_bound_ptr,
-                 "wasm_stack_top_bound"))) {
-        aot_set_last_error("load wasm_stack.top_boundary failed");
-        return false;
-    }
+    if (comp_ctx->call_stack_features.stack_frame_bounds_checks) {
+        offset = I32_TEN;
+        if (!(wasm_stack_top_bound_ptr = LLVMBuildInBoundsGEP2(
+                  comp_ctx->builder, OPQ_PTR_TYPE, func_ctx->exec_env, &offset,
+                  1, "wasm_stack_top_bound_ptr"))
+            || !(func_ctx->wasm_stack_top_bound = LLVMBuildLoad2(
+                     comp_ctx->builder, INT8_PTR_TYPE, wasm_stack_top_bound_ptr,
+                     "wasm_stack_top_bound"))) {
+            aot_set_last_error("load wasm_stack.top_boundary failed");
+            return false;
+        }
 
-    offset = I32_ELEVEN;
-    if (!(func_ctx->wasm_stack_top_ptr = LLVMBuildInBoundsGEP2(
-              comp_ctx->builder, OPQ_PTR_TYPE, func_ctx->exec_env, &offset, 1,
-              "wasm_stack_top_ptr"))) {
-        aot_set_last_error("llvm build inbounds gep failed");
-        return false;
+        offset = I32_ELEVEN;
+        if (!(func_ctx->wasm_stack_top_ptr = LLVMBuildInBoundsGEP2(
+                  comp_ctx->builder, OPQ_PTR_TYPE, func_ctx->exec_env, &offset,
+                  1, "wasm_stack_top_ptr"))) {
+            aot_set_last_error("llvm build inbounds gep failed");
+            return false;
+        }
     }
 
     return true;
@@ -1771,7 +1773,7 @@ aot_create_func_context(const AOTCompData *comp_data, AOTCompContext *comp_ctx,
         goto fail;
     }
 
-    if (comp_ctx->enable_aux_stack_frame
+    if (comp_ctx->aux_stack_frame
         && !create_aux_stack_frame(comp_ctx, func_ctx)) {
         goto fail;
     }
@@ -2577,8 +2579,7 @@ aot_create_comp_context(const AOTCompData *comp_data, aot_comp_option_t option)
     if (option->enable_ref_types)
         comp_ctx->enable_ref_types = true;
 
-    if (option->enable_aux_stack_frame)
-        comp_ctx->enable_aux_stack_frame = true;
+    comp_ctx->aux_stack_frame = option->aux_stack_frame;
 
     if (option->enable_perf_profiling)
         comp_ctx->enable_perf_profiling = true;
@@ -2588,6 +2589,8 @@ aot_create_comp_context(const AOTCompData *comp_data, aot_comp_option_t option)
 
     if (option->enable_aux_stack_check)
         comp_ctx->enable_aux_stack_check = true;
+
+    comp_ctx->call_stack_features = option->call_stack_features;
 
     if (option->is_indirect_mode)
         comp_ctx->is_indirect_mode = true;

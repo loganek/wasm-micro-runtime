@@ -25,7 +25,7 @@ extern "C" {
 #define WASM_FEATURE_REF_TYPES (1 << 3)
 #define WASM_FEATURE_GARBAGE_COLLECTION (1 << 4)
 #define WASM_FEATURE_EXCEPTION_HANDLING (1 << 5)
-#define WASM_FEATURE_MEMORY64 (1 << 6)
+#define WASM_FEATURE_OPTIMIZED_CALL_STACK (1 << 6)
 #define WASM_FEATURE_MULTI_MEMORY (1 << 7)
 #define WASM_FEATURE_DYNAMIC_LINKING (1 << 8)
 #define WASM_FEATURE_COMPONENT_MODEL (1 << 9)
@@ -326,6 +326,10 @@ typedef struct AOTModule {
     /* `.data` and `.text` sections merged into one large mmaped section */
     uint8 *merged_data_text_sections;
     uint32 merged_data_text_sections_size;
+
+#if WASM_ENABLE_DUMP_CALL_STACK != 0
+    uint32 feature_flags;
+#endif
 } AOTModule;
 
 #define AOTMemoryInstance WASMMemoryInstance
