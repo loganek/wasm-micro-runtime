@@ -12,6 +12,9 @@
 #if WASM_ENABLE_GC != 0
 #include "gc_export.h"
 #endif
+#if WASM_ENABLE_DYNAMIC_LINKING != 0
+#include "dynlink_types.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -93,6 +96,14 @@ extern "C" {
 #define MAX_PAGE_COUNT_FLAG 0x01
 #define SHARED_MEMORY_FLAG 0x02
 #define MEMORY64_FLAG 0x04
+
+/**
+ * In the multi-memory proposal, the memarg in loads and stores are
+ * reinterpreted as a bitfield, bit 6 serves as a flag indicating the presence
+ * of the optional memory index, if it is set, then an i32 memory index follows
+ * after the alignment bitfield
+ */
+#define OPT_MEMIDX_FLAG 0x40
 
 #define DEFAULT_NUM_BYTES_PER_PAGE 65536
 #define DEFAULT_MAX_PAGES 65536
@@ -998,6 +1009,10 @@ struct WASMModule {
 
 #if WASM_ENABLE_LOAD_CUSTOM_SECTION != 0
     WASMCustomSection *custom_section_list;
+#endif
+
+#if WASM_ENABLE_DYNAMIC_LINKING != 0
+    DynLinkSections dynlink_sections;
 #endif
 
 #if WASM_ENABLE_FAST_JIT != 0
